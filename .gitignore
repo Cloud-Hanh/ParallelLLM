@@ -1,0 +1,29 @@
+# Random
+**/.env
+**/log
+**/__pycache__
+**/nohup.out
+**/.cache
+input/
+output/
+venv/
+.conda
+.tmp
+.DS_Store
+.vscode
+*.log
+*.logs
+
+# PyCharm
+.idea/
+
+# Cursor
+.cursorrules
+
+# Jupyter notebook
+.ipynb_checkpoints/
+
+# Config
+config
+test
+.todo.txt
