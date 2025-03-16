@@ -22,6 +22,7 @@ class LLMClient:
         self.request_queue = deque(maxlen=self.rate_limit)
         self.total_tokens = 0
         self.total_requests = 0
+        self.active_requests = 0  # 新增活跃请求计数器
         self.logger = logging.getLogger(f"pllm.{provider}")
     
     def is_available(self) -> bool:
@@ -128,45 +129,62 @@ class LoadBalancer:
             raise
     
     def get_best_client(self) -> LLMClient:
-        """获取最佳可用客户端"""
+        """改进后的负载均衡算法"""
         candidates = []
         for provider in self.active_providers:
             for client in self.clients.get(provider, []):
                 if client.is_available():
-                    # 评分标准: 错误最少 > 最近使用时间最久 > 速率限制余量最多
+                    # 新的评分标准（数值越大优先级越高）：
+                    # 1. 活跃请求数最少（负值使更少请求的客户端得分更高）
+                    # 2. 错误计数最少
+                    # 3. 速率限制余量最多
+                    # 4. 最近使用时间最久远
                     score = (
-                        -client.error_count,
-                        -client.last_used,
-                        client.rate_limit - len(client.request_queue)
+                        -client.active_requests * 1000,  # 主要因素
+                        -client.error_count * 100,
+                        (client.rate_limit - len(client.request_queue)) * 10,
+                        -client.last_used  # 次要因素
                     )
                     candidates.append((score, client))
         
         if candidates:
-            return max(candidates, key=lambda x: x[0])[1]
+            # 选择最高得分的客户端
+            best_client = max(candidates, key=lambda x: x[0])[1]
+            best_client.active_requests += 1  # 预占请求槽位
+            return best_client
         raise Exception("No available LLM clients")
     
-    async def execute_request(self, messages: List[Dict[str, str]], **kwargs) -> Dict[str, Any]:
-        """执行LLM请求，自动选择最佳客户端"""
+    async def execute_request(self, messages: List[Dict[str, str]], retry_policy: str = 'fixed', **kwargs) -> Dict[str, Any]:
+        """执行LLM请求，支持不同重试策略"""
         max_retries = 3
         retries = 0
+        last_error = None
         
-        while retries < max_retries:
+        while True:
             try:
                 client = self.get_best_client()
                 self.logger.debug(f"Selected client: {client.provider}")
-                
                 response = await self._call_api(client, messages, **kwargs)
                 client.record_usage(response)
                 return response
                 
             except Exception as e:
                 retries += 1
+                last_error = e
                 client.mark_error(e)
-                self.logger.warning(f"Request failed with {client.provider}, retry {retries}/{max_retries}")
                 
-                if retries >= max_retries:
-                    self.logger.error("All retries failed")
-                    raise Exception(f"Failed after {max_retries} retries: {str(e)}")
+                if retry_policy == 'fixed':
+                    if retries >= max_retries:
+                        self.logger.error(f"All retries failed (policy={retry_policy})")
+                        raise Exception(f"Failed after {retries} retries: {str(e)}")
+                    self.logger.warning(f"Retry {retries}/{max_retries}")
+                    
+                elif retry_policy == 'infinite':
+                    self.logger.warning(f"Retry {retries} (infinite mode), last error: {str(e)}")
+                    await asyncio.sleep(1)  # 防止密集重试
+                    
+                else:
+                    raise ValueError(f"Invalid retry policy: {retry_policy}")
     
     async def _call_api(self, client: LLMClient, messages: List[Dict[str, str]], **kwargs) -> Dict[str, Any]:
         """调用特定客户端的API（适配Siliconflow参数规范）"""
@@ -212,10 +230,13 @@ class LoadBalancer:
                 json=request_params,
                 timeout=aiohttp.ClientTimeout(total=30)
             ) as response:
-                if response.status != 200:
-                    error_text = await response.text()
-                    raise Exception(f"API request failed: {response.status}, {error_text}")
-                return await response.json()
+                try:
+                    if response.status != 200:
+                        error_text = await response.text()
+                        raise Exception(f"API request failed: {response.status}, {error_text}")
+                    return await response.json()
+                finally:
+                    client.active_requests -= 1  # 确保请求计数正确释放
     
     def start_health_check(self) -> None:
         """启动定期健康检查任务"""

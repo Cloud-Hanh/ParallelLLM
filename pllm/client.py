@@ -33,6 +33,7 @@ class Client:
                   messages: List[Dict[str, str]], 
                   temperature: Optional[float] = None,
                   max_tokens: Optional[int] = None,
+                  retry_policy: str = 'fixed',
                   **kwargs) -> Dict[str, Any]:
         """
         发送聊天请求到LLM服务
@@ -41,6 +42,7 @@ class Client:
             messages: 消息列表，格式为[{"role": "user", "content": "Hello"}]
             temperature: 温度参数，控制随机性
             max_tokens: 最大生成token数
+            retry_policy: 重试策略
             **kwargs: 其他参数传递给底层API
             
         Returns:
@@ -50,31 +52,46 @@ class Client:
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
+            retry_policy=retry_policy,
             **kwargs
         )
     
-    async def generate(self, prompt: str, **kwargs) -> str:
+    async def generate(self, 
+                     prompt: str, 
+                     retry_policy: str = 'fixed',
+                     **kwargs) -> str:
         """
         简化的文本生成接口
         
         Args:
             prompt: 用户输入的提示词
+            retry_policy: 重试策略
             **kwargs: 其他参数传递给chat方法
             
         Returns:
             生成的文本内容
         """
         messages = [{"role": "user", "content": prompt}]
-        response = await self.chat(messages, **kwargs)
+        response = await self.balancer.execute_request(
+            messages, 
+            retry_policy=retry_policy,
+            **kwargs
+        )
         return response["choices"][0]["message"]["content"]
     
     def chat_sync(self, messages: List[Dict[str, str]], **kwargs) -> Dict[str, Any]:
         """同步版本的chat方法，适用于非异步环境"""
         return asyncio.run(self.chat(messages, **kwargs))
     
-    def generate_sync(self, prompt: str, **kwargs) -> str:
+    def generate_sync(self,
+                    prompt: str,
+                    retry_policy: str = 'fixed',
+                    **kwargs) -> str:
         """同步版本的generate方法，适用于非异步环境"""
-        return asyncio.run(self.generate(prompt, **kwargs))
+        loop = asyncio.get_event_loop()
+        return loop.run_until_complete(
+            self.generate(prompt, retry_policy=retry_policy, **kwargs)
+        )
     
     def get_stats(self) -> Dict[str, Any]:
         """获取所有客户端的使用统计信息"""

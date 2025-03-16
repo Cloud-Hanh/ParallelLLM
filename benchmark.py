@@ -66,13 +66,32 @@ class Benchmark:
         batch_size = workers
         results = []
         failed = 0
+        details = []  # 新增结果记录
         
         for i in range(0, len(questions), batch_size):
             batch = questions[i:i+batch_size]
             tasks = [self.client.generate(q) for q in batch]
             
             try:
+                batch_start = time.perf_counter()
                 batch_results = await asyncio.gather(*tasks, return_exceptions=True)
+                
+                # 记录每个问题的详细结果
+                for q, result in zip(batch, batch_results):
+                    if isinstance(result, Exception):
+                        details.append({
+                            "question": q,
+                            "success": False,
+                            "error": str(result),
+                            "latency": time.perf_counter() - batch_start
+                        })
+                    else:
+                        details.append({
+                            "question": q,
+                            "response": result,
+                            "success": True,
+                            "latency": time.perf_counter() - batch_start
+                        })
                 results.extend(batch_results)
             except Exception as e:
                 self.logger.error(f"批量请求失败: {str(e)}")
@@ -87,7 +106,8 @@ class Benchmark:
             "success": success,
             "failed": failed,
             "total_time": round(total_time, 2),
-            "qps": round(success / total_time, 2) if total_time > 0 else 0
+            "qps": round(success / total_time, 2) if total_time > 0 else 0,
+            "details": details  # 添加详细记录
         }
 
     async def sequential_test(self, questions: List[str]) -> dict:
@@ -103,13 +123,28 @@ class Benchmark:
         start_time = time.perf_counter()
         success = 0
         failed = 0
+        details = []  # 新增结果记录
         
         for q in questions:
             try:
-                await self.client.generate(q)
+                start = time.perf_counter()
+                response = await self.client.generate(q)
+                latency = time.perf_counter() - start
+                details.append({
+                    "question": q,
+                    "response": response,
+                    "success": True,
+                    "latency": latency
+                })
                 success += 1
             except Exception as e:
                 self.logger.error(f"请求失败: {str(e)}")
+                details.append({
+                    "question": q,
+                    "success": False,
+                    "error": str(e),
+                    "latency": time.perf_counter() - start
+                })
                 failed += 1
         
         total_time = time.perf_counter() - start_time
@@ -120,16 +155,16 @@ class Benchmark:
             "success": success,
             "failed": failed,
             "total_time": round(total_time, 2),
-            "qps": round(success / total_time, 2) if total_time > 0 else 0
+            "qps": round(success / total_time, 2) if total_time > 0 else 0,
+            "details": details  # 添加详细记录
         }
 
-    def generate_report(self, results: dict, model_name: str) -> str:
+    def generate_report(self, results: dict) -> str:
         """
         生成测试报告
         
         Args:
             results: 测试结果数据
-            model_name: 模型名称
             
         Returns:
             格式化后的报告字符串
@@ -137,13 +172,13 @@ class Benchmark:
         # 基础报告
         report = {
             "timestamp": datetime.now().isoformat(),
-            "model": model_name,
+            "test_questions": self.generate_questions(0),  # 记录完整问题集
             "results": results,
             "stats": self.client.get_stats()
         }
         
         # 保存文件
-        filename = f"benchmark_{model_name}_{datetime.now().strftime('%Y%m%d%H%M')}.json"
+        filename = f"benchmark_{datetime.now().strftime('%Y%m%d%H%M')}.json"
         path = os.path.join(self.output_dir, filename)
         
         with open(path, 'w', encoding='utf-8') as f:
@@ -155,7 +190,7 @@ async def main():
     """测试执行入口"""
     # 配置测试参数
     TEST_CONFIG = "input/config/base.yaml"
-    QUESTIONS_NUM = 20  # 总测试问题数
+    QUESTIONS_NUM = 100  # 总测试问题数
     WORKERS = 10         # 最大并发数
     
     benchmark = Benchmark(TEST_CONFIG)
@@ -171,7 +206,6 @@ async def main():
     # 生成报告
     report_path = benchmark.generate_report(
         results={"parallel": parallel_result, "sequential": sequential_result},
-        model_name="your-model-name"  # 从配置中获取实际模型名称
     )
     
     print(f"测试报告已保存至：{report_path}")
