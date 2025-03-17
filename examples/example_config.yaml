@@ -1,0 +1,14 @@
+llm:
+  use: siliconflow
+  siliconflow:
+    - api_key: "sk-xxx"
+      api_base: "https://api.siliconflow.cn/v1/chat/completions"
+      model: "deepseek-ai/DeepSeek-V2.5"
+      rate_limit: 20
+    
+    - api_key: "sk-xxx"
+      api_base: "https://api.siliconflow.cn/v1/chat/completions"
+      model: "deepseek-ai/DeepSeek-V2.5"
+      rate_limit: 20
+    
+   

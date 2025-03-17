@@ -42,7 +42,7 @@ class Client:
             messages: 消息列表，格式为[{"role": "user", "content": "Hello"}]
             temperature: 温度参数，控制随机性
             max_tokens: 最大生成token数
-            retry_policy: 重试策略
+            retry_policy: 重试策略（infinite, fixed, retry_once）
             **kwargs: 其他参数传递给底层API
             
         Returns:
@@ -80,14 +80,33 @@ class Client:
         return response["choices"][0]["message"]["content"]
     
     def chat_sync(self, messages: List[Dict[str, str]], **kwargs) -> Dict[str, Any]:
-        """同步版本的chat方法，适用于非异步环境"""
+        """
+        同步执行聊天请求
+        
+        Args:
+            messages: 消息列表，格式为[{"role": "user", "content": "Hello"}]
+            **kwargs: 透传至chat()方法参数（temperature/max_tokens等）
+            
+        Returns:
+            包含完整响应数据的字典（同chat()方法）
+        """
         return asyncio.run(self.chat(messages, **kwargs))
     
     def generate_sync(self,
                     prompt: str,
                     retry_policy: str = 'fixed',
                     **kwargs) -> str:
-        """同步版本的generate方法，适用于非异步环境"""
+        """
+        同步执行文本生成
+        
+        Args:
+            prompt: 用户输入的提示文本
+            retry_policy: 重试策略配置（infinite, fixed, retry_once）
+            **kwargs: 透传至generate()方法参数
+            
+        Returns:
+            生成的文本内容（同generate()方法）
+        """
         loop = asyncio.get_event_loop()
         return loop.run_until_complete(
             self.generate(prompt, retry_policy=retry_policy, **kwargs)

@@ -11,7 +11,7 @@ from typing import List
 from pllm import Client
 
 class Benchmark:
-    """性能基准测试工具"""
+    """LLM性能基准测试工具"""
     
     def __init__(self, config_path: str, output_dir: str = "output/benchmark"):
         """
@@ -25,7 +25,7 @@ class Benchmark:
         self.output_dir = output_dir
         os.makedirs(output_dir, exist_ok=True)
         
-        # 配置日志
+        # 需要自定义日志格式和存储位置
         logging.basicConfig(
             level=logging.INFO,
             format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -37,10 +37,10 @@ class Benchmark:
         生成测试问题集
         
         Args:
-            n: 问题数量
+            n: 需要生成的问题数量
             
         Returns:
-            包含n个测试问题的列表
+            包含指定数量问题的列表
         """
         base_question = "请用300字左右解释什么是{}"
         topics = [
@@ -51,14 +51,14 @@ class Benchmark:
 
     async def parallel_test(self, questions: List[str], workers: int = 10) -> dict:
         """
-        并行测试
+        执行并行压力测试
         
         Args:
-            questions: 问题列表
-            workers: 最大并发数
+            questions: 要测试的问题列表
+            workers: 最大并发请求数
             
         Returns:
-            测试结果字典
+            包含测试指标和详细结果的字典
         """
         start_time = time.perf_counter()
         
@@ -70,7 +70,7 @@ class Benchmark:
         
         for i in range(0, len(questions), batch_size):
             batch = questions[i:i+batch_size]
-            tasks = [self.client.generate(q) for q in batch]
+            tasks = [self.client.generate(q, retry_policy='infinite') for q in batch]
             
             try:
                 batch_start = time.perf_counter()
@@ -112,13 +112,13 @@ class Benchmark:
 
     async def sequential_test(self, questions: List[str]) -> dict:
         """
-        顺序测试
+        执行顺序基准测试
         
         Args:
-            questions: 问题列表
+            questions: 要测试的问题列表
             
         Returns:
-            测试结果字典
+            包含测试指标和详细结果的字典
         """
         start_time = time.perf_counter()
         success = 0
@@ -128,7 +128,7 @@ class Benchmark:
         for q in questions:
             try:
                 start = time.perf_counter()
-                response = await self.client.generate(q)
+                response = await self.client.generate(q, retry_policy='infinite')
                 latency = time.perf_counter() - start
                 details.append({
                     "question": q,
@@ -167,12 +167,12 @@ class Benchmark:
             results: 测试结果数据
             
         Returns:
-            格式化后的报告字符串
+            报告文件存储路径
         """
-        # 基础报告
+        # 需要记录完整问题集用于结果分析
         report = {
             "timestamp": datetime.now().isoformat(),
-            "test_questions": self.generate_questions(0),  # 记录完整问题集
+            "test_questions": self.generate_questions(0),
             "results": results,
             "stats": self.client.get_stats()
         }
