@@ -21,6 +21,21 @@ pip install -e .
 
 1. Modify the config file: `examples/example_config.yaml`
 
+```yaml
+llm:
+  use: siliconflow
+  siliconflow:
+    - api_key: "sk-xxx"
+      api_base: "https://api.siliconflow.cn/v1/chat/completions"
+      model: "model name"
+      rate_limit: 20
+    
+    - api_key: "sk-xxx"
+      api_base: "https://api.siliconflow.cn/v1/chat/completions"
+      model: "model name"
+      rate_limit: 20
+```
+
 2. Ask simple questions:
 
 ```python
@@ -61,4 +76,5 @@ results = await asyncio.gather(*tasks, return_exceptions=True)
 
 ## TODO
 
-- [ ] Add more LLM providers
+- [ ] Currently only supports siliconflow, need to add more LLM providers
+- [ ] Change into English comments
