@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=42"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pllm-balancer"
+version = "0.1.0"
+authors = [
+    {name="Haojia Zhu", email="zhuhaojia2001@126.com"},
+]
+description = "Intelligent LLM Load Balancer with Multiple Provider Support"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "aiohttp >=3.9.0",
+    "PyYAML >=6.0",
+    "python-dotenv"
+]
+
+[project.urls]
+repository = "https://github.com/16131zzzzzzzz/ParallelLLM" 

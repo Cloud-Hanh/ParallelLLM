@@ -12,7 +12,9 @@ A parallel Large Language Model invocation framework providing:
 ### Installation
 
 ```bash
-pip install -r requirements.txt
+git clone https://github.com/16131zzzzzzzz/ParallelLLM.git
+cd ParallelLLM
+pip install -e .
 ```
 
 ### Usage
