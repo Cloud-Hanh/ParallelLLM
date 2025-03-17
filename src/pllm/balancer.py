@@ -220,7 +220,6 @@ class LoadBalancer:
                 "Content-Type": "application/json"
             }
             
-            # 合并自定义头信息
             if 'headers' in client.config:
                 headers.update(client.config['headers'])
                 
@@ -228,11 +227,11 @@ class LoadBalancer:
                 client.config['api_base'],
                 headers=headers,
                 json=request_params,
-                timeout=aiohttp.ClientTimeout(total=30)
+                timeout=None  # 移除固定超时限制
             ) as response:
                 try:
                     if response.status != 200:
-                        error_text = await response.text()
+                        error_text = (await response.text()).strip() or "No error message"
                         raise Exception(f"API request failed: {response.status}, {error_text}")
                     return await response.json()
                 finally:
