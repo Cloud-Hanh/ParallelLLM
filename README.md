@@ -6,7 +6,6 @@ A parallel Large Language Model invocation framework providing:
 - Load balancing across multiple LLM providers
 - Hybrid synchronous/asynchronous interfaces
 - Automatic failover and intelligent retry mechanisms
-- Performance benchmarking utilities
 
 ## Quick Start
 
@@ -18,9 +17,42 @@ pip install -r requirements.txt
 
 ### Usage
 
-Config
+1. Modify the config file: `examples/example_config.yaml`
+
+2. Ask simple questions:
 
 ```python
-from pllm.client import LLMClient
+from pllm import Client
+
+client = Client("examples/example_config.yaml")
+
+response = await client.generate("解释一下量子计算的基本原理")
+chat_response = await client.chat([
+        {"role": "system", "content": "你是一个有用的AI助手。"},
+        {"role": "user", "content": "写一个Python函数计算斐波那契数列。"}
+])
 ```
 
+3. Ask multiple questions in parallel:
+
+```python
+from pllm import Client
+import asyncio
+
+client = Client("examples/example_config.yaml")
+
+questions = [
+    "解释量子隧穿效应",
+    "写一个快速排序算法",
+    "什么是Transformer架构？",
+    "如何用Python计算圆周率？",
+    "解释深度神经网络的工作原理",
+    "写一个正则表达式匹配邮箱",
+    "什么是元学习？",
+    "解释梯度消失问题",
+    "写一个递归阶乘函数",
+    "什么是注意力机制？"
+]
+tasks = [client.generate(q) for q in questions]
+results = await asyncio.gather(*tasks, return_exceptions=True)
+```
