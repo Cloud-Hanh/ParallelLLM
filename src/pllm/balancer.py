@@ -188,19 +188,18 @@ class LoadBalancer:
     
     async def _call_api(self, client: LLMClient, messages: List[Dict[str, str]], **kwargs) -> Dict[str, Any]:
         """调用特定客户端的API（适配Siliconflow参数规范）"""
-        # 合并基础配置和请求参数
         request_params = {
             "model": client.config['model'],
             "messages": messages,
-            "temperature": kwargs.get('temperature', client.config.get('temperature', 0.7)),
-            "top_p": kwargs.get('top_p', client.config.get('top_p', 0.7)),
-            "top_k": kwargs.get('top_k', client.config.get('top_k', 50)),
-            "frequency_penalty": kwargs.get('frequency_penalty', client.config.get('frequency_penalty', 0.5)),
-            "stream": kwargs.get('stream', False),
-            "max_tokens": kwargs.get('max_tokens'),
-            "stop": kwargs.get('stop'),
-            "response_format": kwargs.get('response_format'),
-            "tools": kwargs.get('tools')
+            # "temperature": kwargs.get('temperature', client.config.get('temperature', 0.7)),
+            # "top_p": kwargs.get('top_p', client.config.get('top_p', 0.7)),
+            # "top_k": kwargs.get('top_k', client.config.get('top_k', 50)),
+            # "frequency_penalty": kwargs.get('frequency_penalty', client.config.get('frequency_penalty', 0.5)),
+            # "stream": kwargs.get('stream', False),
+            "max_tokens": 4096,
+            # "stop": kwargs.get('stop'),
+            # "response_format": kwargs.get('response_format'),
+            # "tools": kwargs.get('tools')
         }
 
         # 清理空值参数
