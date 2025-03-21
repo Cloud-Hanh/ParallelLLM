@@ -3,7 +3,7 @@ from pllm import Client
 
 async def main():
     # 初始化客户端
-    client = Client("input/config/base.yaml")
+    client = Client("input/config/llm.yaml")
     
     # 新增并行测试示例
     questions = [
@@ -48,7 +48,7 @@ async def main():
 
 # 对于不支持异步的环境，可以使用同步接口
 def sync_example():
-    client = Client("input/config/base.yaml")
+    client = Client("input/config/llm.yaml")
     response = client.generate_sync("什么是机器学习？")
     print(response)
 
@@ -57,4 +57,5 @@ if __name__ == "__main__":
     asyncio.run(main())
     
     # 或者运行同步示例
-    # sync_example() 
+    # sync_example()
+    

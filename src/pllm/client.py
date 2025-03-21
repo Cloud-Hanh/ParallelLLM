@@ -132,10 +132,7 @@ class Client:
         Returns:
             生成的文本内容（同generate()方法）
         """
-        loop = asyncio.get_event_loop()
-        return loop.run_until_complete(
-            self.generate(prompt, retry_policy=retry_policy, **kwargs)
-        )
+        return asyncio.run(self.generate(prompt, retry_policy=retry_policy, **kwargs))
     
     def embedding_sync(self, 
                      text: str,
@@ -152,17 +149,20 @@ class Client:
         Returns:
             embedding向量列表
         """
-        loop = asyncio.get_event_loop()
-        return loop.run_until_complete(
+        return asyncio.run(
             self.embedding(text, encoding_format=encoding_format, **kwargs)
         )
     
     def get_stats(self) -> Dict[str, Any]:
         """获取所有客户端的使用统计信息"""
         stats = {}
+        # 添加调试日志
+        print(f"Available providers: {self.balancer.clients.keys()}") 
         for provider, clients in self.balancer.clients.items():
+            print(f"Processing provider: {provider} with {len(clients)} clients")
             provider_stats = []
             for i, client in enumerate(clients):
+                print(f"Client {i}: requests={client.total_requests}, tokens={client.total_tokens}")
                 provider_stats.append({
                     "id": i,
                     "active": client.is_active,
@@ -170,4 +170,5 @@ class Client:
                     "total_requests": client.total_requests,
                     "total_tokens": client.total_tokens
                 })
-            stats[provider] = provider_stats 
+            stats[provider] = provider_stats
+        return stats 

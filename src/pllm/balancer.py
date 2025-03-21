@@ -39,11 +39,9 @@ class LLMClient:
         return True
     
     def record_usage(self, response: Dict[str, Any]) -> None:
-        """记录API使用情况"""
-        # 修改以支持embedding的响应格式
+        """记录API使用情况（仅处理标准LLM响应格式）"""
+        # 仅记录明确包含usage字段的响应
         usage = response.get('usage', {})
-        if not usage:  # 处理embedding的用量格式
-            usage = response.get('data', [{}])[0].get('usage', {})
         
         self.total_tokens += usage.get('total_tokens', 0)
         self.total_requests += 1
@@ -90,46 +88,25 @@ class LoadBalancer:
                 raise ValueError("No providers specified in config")
                 
             self.active_providers = [p.strip() for p in providers_str.split(',')]
-            
-            load_dotenv()  # 加载.env文件中的环境变量
-            
+            self.clients = {}  # 确保初始化clients字典
+
+            # 修复：遍历所有支持的provider配置
             for provider in self.active_providers:
-                provider_configs = llm_config.get(provider)
+                provider_configs = llm_config.get(provider, [])
                 if not provider_configs:
-                    self.logger.warning(f"Missing configuration for provider: {provider}")
-                    continue
+                    raise ValueError(f"No configuration found for provider: {provider}")
                 
-                # 处理单个配置的情况（向后兼容）
-                if not isinstance(provider_configs, list):
+                # 支持单配置和多配置格式
+                if isinstance(provider_configs, dict):
                     provider_configs = [provider_configs]
-                    
-                for idx, provider_config in enumerate(provider_configs):
-                    # 验证必要的配置项
-                    required_fields = ['api_key', 'api_base', 'model']
-                    missing_fields = [field for field in required_fields if field not in provider_config]
-                    if missing_fields:
-                        self.logger.warning(f"Provider {provider} (key {idx}) missing required fields: {', '.join(missing_fields)}")
-                        continue
-                    
-                    # 替换环境变量
-                    for key, value in provider_config.items():
-                        if isinstance(value, str) and value.startswith("${") and value.endswith("}"):
-                            env_var = value[2:-1]
-                            env_value = os.getenv(env_var)
-                            if env_value:
-                                provider_config[key] = env_value
-                            else:
-                                self.logger.warning(f"Environment variable {env_var} not found")
-                    
-                    client = LLMClient(f"{provider}-{idx}", provider_config)
-                    self.clients.setdefault(provider, []).append(client)
-                    self.logger.info(f"Initialized client for {provider} (key {idx})")
                 
-            if not any(self.clients.values()):
-                raise ValueError("No valid clients could be initialized")
+                self.clients[provider] = [
+                    LLMClient(provider, cfg) for cfg in provider_configs
+                ]
+                self.logger.info(f"Initialized {len(provider_configs)} clients for {provider}")
                 
         except Exception as e:
-            self.logger.error(f"Failed to load config: {str(e)}")
+            self.logger.error(f"Config load failed: {str(e)}")
             raise
     
     def get_best_client(self) -> LLMClient:
