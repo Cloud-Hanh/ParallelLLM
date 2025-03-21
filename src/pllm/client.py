@@ -4,7 +4,7 @@ from typing import Dict, List, Optional, Union, Any
 
 import yaml
 
-from .balancer import LLMClient, LoadBalancer
+from .balancer import LoadBalancer
 
 class Client:
     """
@@ -79,6 +79,31 @@ class Client:
         )
         return response["choices"][0]["message"]["content"]
     
+    async def embedding(self, 
+                      text: str,
+                      encoding_format: str = 'float',
+                      retry_policy: str = 'fixed',
+                      **kwargs) -> List[float]:
+        """
+        获取文本的embedding向量
+        
+        Args:
+            text: 需要编码的文本
+            encoding_format: 编码格式（默认float）
+            retry_policy: 重试策略
+            **kwargs: 其他API参数
+            
+        Returns:
+            embedding向量列表
+        """
+        response = await self.balancer.execute_embedding_request(
+            input_text=text,
+            encoding_format=encoding_format,
+            retry_policy=retry_policy,
+            **kwargs
+        )
+        return response['data'][0]['embedding']
+    
     def chat_sync(self, messages: List[Dict[str, str]], **kwargs) -> Dict[str, Any]:
         """
         同步执行聊天请求
@@ -112,6 +137,26 @@ class Client:
             self.generate(prompt, retry_policy=retry_policy, **kwargs)
         )
     
+    def embedding_sync(self, 
+                     text: str,
+                     encoding_format: str = 'float',
+                     **kwargs) -> List[float]:
+        """
+        同步执行embedding请求
+        
+        Args:
+            text: 需要编码的文本
+            encoding_format: 编码格式（默认float）
+            **kwargs: 透传至embedding()方法参数
+            
+        Returns:
+            embedding向量列表
+        """
+        loop = asyncio.get_event_loop()
+        return loop.run_until_complete(
+            self.embedding(text, encoding_format=encoding_format, **kwargs)
+        )
+    
     def get_stats(self) -> Dict[str, Any]:
         """获取所有客户端的使用统计信息"""
         stats = {}
@@ -125,5 +170,4 @@ class Client:
                     "total_requests": client.total_requests,
                     "total_tokens": client.total_tokens
                 })
-            stats[provider] = provider_stats
-        return stats 
+            stats[provider] = provider_stats 

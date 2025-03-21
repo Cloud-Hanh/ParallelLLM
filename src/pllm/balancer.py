@@ -40,7 +40,11 @@ class LLMClient:
     
     def record_usage(self, response: Dict[str, Any]) -> None:
         """记录API使用情况"""
+        # 修改以支持embedding的响应格式
         usage = response.get('usage', {})
+        if not usage:  # 处理embedding的用量格式
+            usage = response.get('data', [{}])[0].get('usage', {})
+        
         self.total_tokens += usage.get('total_tokens', 0)
         self.total_requests += 1
         
@@ -268,3 +272,76 @@ class LoadBalancer:
         for provider_clients in self.clients.values():
             for client in provider_clients:
                 yield client 
+
+    async def execute_embedding_request(self, input_text: str, retry_policy: str = 'fixed', **kwargs) -> Dict[str, Any]:
+        """执行Embedding请求"""
+        max_retries = 3
+        retries = 0
+        last_error = None
+        
+        while True:
+            try:
+                client = self.get_best_client()
+                self.logger.debug(f"Selected client for embedding: {client.provider}")
+                response = await self._call_embedding_api(client, input_text, **kwargs)
+                client.record_usage(response)
+                return response
+                
+            except Exception as e:
+                retries += 1
+                last_error = e
+                client.mark_error(e)
+                
+                if retry_policy == 'fixed':
+                    if retries >= max_retries:
+                        self.logger.error(f"All embedding retries failed (policy={retry_policy})")
+                        raise Exception(f"Embedding failed after {retries} retries: {str(e)}")
+                    self.logger.warning(f"Embedding retry {retries}/{max_retries}")
+                    
+                elif retry_policy == 'infinite':
+                    self.logger.warning(f"Embedding retry {retries} (infinite mode), last error: {str(e)}")
+                    await asyncio.sleep(1)
+                    
+                else:
+                    raise ValueError(f"Invalid retry policy: {retry_policy}")
+
+    async def _call_embedding_api(self, client: LLMClient, input_text: str, **kwargs) -> Dict[str, Any]:
+        """调用特定客户端的Embedding API"""
+        request_params = {
+            "model": client.config['model'],
+            "input": input_text,
+            "encoding_format": kwargs.get('encoding_format', 'float')
+        }
+
+        # 清理空值参数
+        request_params = {k: v for k, v in request_params.items() if v is not None}
+
+        # 添加其他自定义参数
+        reserved_params = {'encoding_format'}
+        for key, value in kwargs.items():
+            if key not in reserved_params and value is not None:
+                request_params[key] = value
+
+        # 执行API调用
+        async with aiohttp.ClientSession() as session:
+            headers = {
+                "Authorization": f"Bearer {client.config['api_key']}",
+                "Content-Type": "application/json"
+            }
+            
+            if 'headers' in client.config:
+                headers.update(client.config['headers'])
+                
+            async with session.post(
+                client.config['api_base'],
+                headers=headers,
+                json=request_params,
+                timeout=None
+            ) as response:
+                try:
+                    if response.status != 200:
+                        error_text = (await response.text()).strip() or "No error message"
+                        raise Exception(f"Embedding API failed: {response.status}, {error_text}")
+                    return await response.json()
+                finally:
+                    client.active_requests -= 1 
