@@ -8,6 +8,7 @@ import os
 from dotenv import load_dotenv
 
 import aiohttp
+import random
 
 class LLMClient:
     """管理单个LLM API客户端，包括速率限制和错误跟踪"""
@@ -110,7 +111,7 @@ class LoadBalancer:
             raise
     
     def get_best_client(self) -> LLMClient:
-        """改进后的负载均衡算法"""
+        """改进后的负载均衡算法，支持同分随机选择"""
         candidates = []
         for provider in self.active_providers:
             for client in self.clients.get(provider, []):
@@ -129,8 +130,12 @@ class LoadBalancer:
                     candidates.append((score, client))
         
         if candidates:
-            # 选择最高得分的客户端
-            best_client = max(candidates, key=lambda x: x[0])[1]
+            # 找到最高分
+            max_score = max(candidates, key=lambda x: x[0])[0]
+            # 收集所有达到最高分的客户端
+            best_candidates = [client for score, client in candidates if score == max_score]
+            # 随机选择一个
+            best_client = random.choice(best_candidates)
             best_client.active_requests += 1  # 预占请求槽位
             return best_client
         raise Exception("No available LLM clients")
@@ -172,10 +177,6 @@ class LoadBalancer:
         request_params = {
             "model": client.config['model'],
             "messages": messages,
-            "temperature": kwargs.get('temperature', client.config.get('temperature', 0.7)),
-            "top_p": kwargs.get('top_p', client.config.get('top_p', 0.7)),
-            "top_k": kwargs.get('top_k', client.config.get('top_k', 50)),
-            "frequency_penalty": kwargs.get('frequency_penalty', client.config.get('frequency_penalty', 0.5)),
             "stream": kwargs.get('stream', False),
             "max_tokens": kwargs.get('max_tokens', 4096),
             "stop": kwargs.get('stop'),
