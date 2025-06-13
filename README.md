@@ -74,6 +74,12 @@ tasks = [client.generate(q) for q in questions]
 results = await asyncio.gather(*tasks, return_exceptions=True)
 ```
 
+## Test
+
+```bash
+python -m unittest tests/test_client.py
+```
+
 ## TODO
 
 - [ ] Currently only supports siliconflow, need to add more LLM providers

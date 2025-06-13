@@ -80,7 +80,7 @@ class Client:
         response = await self.balancer.execute_request(
             messages, retry_policy=retry_policy, **kwargs
         )
-        return response["choices"][0]["message"]["content"]
+        return response
 
     execute = generate
 

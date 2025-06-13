@@ -45,6 +45,11 @@ class LLMClient:
         # 仅记录明确包含usage字段的响应
         usage = response.get("usage", {})
 
+        if len(usage) == 0:
+            # TODO: this is not suitable for all providers
+            usage_len = len(response["output_text"])
+            usage = {"total_tokens": usage_len}
+
         self.total_tokens += usage.get("total_tokens", 0)
         self.total_requests += 1
 
@@ -174,12 +179,15 @@ class LoadBalancer:
                 # 使用官方SDK进行调用
                 if client.provider == "openai":
                     response = await self._call_openai(client, messages, **kwargs)
+                    client.record_usage(response)
+                    response = response["output_text"]
                 elif client.provider == "siliconflow":
                     response = await self._call_siliconflow(client, messages, **kwargs)
+                    client.record_usage(response)
+                    response = response["choices"][0]["message"]["content"]
                 else:
                     raise ValueError(f"Unsupported provider: {client.provider}")
 
-                client.record_usage(response)
                 return response
 
             except Exception as e:
@@ -207,7 +215,7 @@ class LoadBalancer:
     ) -> Dict[str, Any]:
         """使用OpenAI官方SDK进行调用"""
         openai_client = OpenAI(
-            api_key=client.config["api_key"], base_url=client.api_base
+            api_key=client.config["api_key"], base_url=client.config["api_base"]
         )
 
         # 构建请求参数
@@ -220,8 +228,8 @@ class LoadBalancer:
         }
 
         # 执行调用
-        response = await openai_client.chat.completions.create(**params)
-        return response.dict()  # 将Pydantic模型转换为字典
+        response = await openai_client.response.create(**params)
+        return response
 
     async def _call_siliconflow(
         self, client: LLMClient, messages: List[Dict[str, str]], **kwargs

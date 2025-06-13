@@ -21,11 +21,11 @@ class TestPLLMClient(unittest.IsolatedAsyncioTestCase):
         # 创建测试配置文件
         self.config = {
             "llm": {
-                "use": "test_provider",
-                "test_provider": {
-                    "api_key": "test-key",
-                    "api_base": "https://test.api/v1",
-                    "model": "test-model",
+                "use": "siliconflow ",
+                "siliconflow": {
+                    "api_key": "",
+                    "api_base": "https://api.siliconflow.cn/v1/chat/completions",
+                    "model": "deepseek-ai/DeepSeek-V2.5",
                 },
             }
         }
