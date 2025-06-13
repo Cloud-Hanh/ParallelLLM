@@ -1,5 +1,5 @@
 llm:
-  use: openai  # or siliconflow
+  use: openai, siliconflow
   openai:
     - api_key: "sk-your-openai-key"
       api_base: "https://api.openai.com/v1"
