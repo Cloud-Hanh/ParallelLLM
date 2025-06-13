@@ -43,7 +43,7 @@ from pllm import Client
 
 client = Client("examples/example_config.yaml")
 
-response = await client.generate("解释一下量子计算的基本原理")
+response = await client.generate("解释一下量子计算的基本原理", retry_policy="infinite")
 chat_response = await client.chat([
         {"role": "system", "content": "你是一个有用的AI助手。"},
         {"role": "user", "content": "写一个Python函数计算斐波那契数列。"}

@@ -79,6 +79,8 @@ class Client:
         )
         return response["choices"][0]["message"]["content"]
     
+    execute = generate
+
     async def embedding(self, 
                       text: str,
                       encoding_format: str = 'float',
