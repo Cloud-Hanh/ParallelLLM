@@ -1,5 +1,11 @@
 llm:
-  use: siliconflow
+  use: openai  # or siliconflow
+  openai:
+    - api_key: "sk-your-openai-key"
+      api_base: "https://api.openai.com/v1"
+      model: "gpt-3.5-turbo"
+      rate_limit: 20
+    
   siliconflow:
     - api_key: "sk-xxx"
       api_base: "https://api.siliconflow.cn/v1/chat/completions"
