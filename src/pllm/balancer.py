@@ -8,7 +8,7 @@ import os
 from dotenv import load_dotenv
 import aiohttp
 import random
-from openai import OpenAI
+from openai import AsyncOpenAI
 
 
 class LLMClient:
@@ -209,7 +209,7 @@ class LoadBalancer:
         self, client: LLMClient, messages: List[Dict[str, str]], **kwargs
     ) -> Dict[str, Any]:
         """使用OpenAI官方SDK进行调用"""
-        openai_client = OpenAI(
+        openai_client = AsyncOpenAI(
             api_key=client.config["api_key"], base_url=client.config["api_base"]
         )
 
@@ -223,7 +223,7 @@ class LoadBalancer:
         }
 
         # 执行调用
-        response = await openai_client.completions.create(**params)
+        response = await openai_client.chat.completions.create(**params)
         return response
 
     async def _call_siliconflow(
