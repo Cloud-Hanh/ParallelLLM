@@ -45,11 +45,6 @@ class LLMClient:
         # 仅记录明确包含usage字段的响应
         usage = response.get("usage", {})
 
-        if len(usage) == 0:
-            # TODO: this is not suitable for all providers
-            usage_len = len(response["output_text"])
-            usage = {"total_tokens": usage_len}
-
         self.total_tokens += usage.get("total_tokens", 0)
         self.total_requests += 1
 
@@ -180,7 +175,7 @@ class LoadBalancer:
                 if client.provider == "openai":
                     response = await self._call_openai(client, messages, **kwargs)
                     client.record_usage(response)
-                    response = response["output_text"]
+                    response = response["choices"][0]["text"]
                 elif client.provider == "siliconflow":
                     response = await self._call_siliconflow(client, messages, **kwargs)
                     client.record_usage(response)
@@ -220,15 +215,15 @@ class LoadBalancer:
 
         # 构建请求参数
         params = {
-            "model": client.model,
-            "messages": messages,
+            "model": client.config["model"],
+            "prompt": messages[0]["content"],
             "max_tokens": kwargs.get("max_tokens", 4096),
             "temperature": kwargs.get("temperature", 0.7),
             "stream": kwargs.get("stream", False),
         }
 
         # 执行调用
-        response = await openai_client.responses.create(**params)
+        response = await openai_client.completions.create(**params)
         return response
 
     async def _call_siliconflow(
