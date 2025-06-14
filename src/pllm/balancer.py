@@ -228,7 +228,7 @@ class LoadBalancer:
         }
 
         # 执行调用
-        response = await openai_client.response.create(**params)
+        response = await openai_client.responses.create(**params)
         return response
 
     async def _call_siliconflow(
