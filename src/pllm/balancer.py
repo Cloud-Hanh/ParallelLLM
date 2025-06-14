@@ -224,7 +224,7 @@ class LoadBalancer:
 
         # 执行调用
         response = await openai_client.chat.completions.create(**params)
-        return response
+        return response.dict()
 
     async def _call_siliconflow(
         self, client: LLMClient, messages: List[Dict[str, str]], **kwargs
