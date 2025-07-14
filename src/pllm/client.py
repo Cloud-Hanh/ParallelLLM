@@ -84,6 +84,33 @@ class Client:
 
     execute = generate
 
+    def invoke(self, prompt: str, retry_policy: str = "fixed", **kwargs) -> str:
+        """
+        调用LLM服务
+
+        Args:
+            prompt: 用户输入的提示词
+            retry_policy: 重试策略
+            **kwargs: 其他参数传递给chat方法
+        """
+        return asyncio.run(self.generate(prompt, retry_policy=retry_policy, **kwargs))
+    
+    def invoke_batch(self, prompts: List[str], retry_policy: str = "fixed", **kwargs) -> List[str]:
+        # TODO: not safe when failure occurs
+        """
+        批量调用LLM服务
+
+        Args:
+            prompts: 用户输入的提示词列表
+            retry_policy: 重试策略
+            **kwargs: 其他参数传递给chat方法
+        """
+        async def runner():
+            tasks = [self.generate(prompt, retry_policy=retry_policy, **kwargs) for prompt in prompts]
+            results = await asyncio.gather(*tasks)
+            return results
+        return asyncio.run(runner())
+
     async def embedding(
         self,
         text: str,
