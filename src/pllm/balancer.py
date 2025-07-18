@@ -43,7 +43,10 @@ class LLMClient:
     def record_usage(self, response: Dict[str, Any]) -> None:
         """记录API使用情况（仅处理标准LLM响应格式）"""
         # 仅记录明确包含usage字段的响应
-        usage = response.model_dump().get("usage", {})
+        if not isinstance(response, dict):
+            usage = response.model_dump().get("usage", {})
+        else:
+            usage = response.get("usage", {})
 
         self.total_tokens += usage.get("total_tokens", 0)
         self.total_requests += 1
