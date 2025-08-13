@@ -3,7 +3,7 @@ llm:
   openai:
     - api_key: "sk-your-openai-key"
       api_base: "https://api.openai.com/v1"
-      model: "gpt-3.5-turbo"
+      model: "gpt-4o-mini"
       rate_limit: 20
     
   siliconflow:

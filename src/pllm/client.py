@@ -29,7 +29,7 @@ class Client:
         # 初始化负载均衡器
         self.balancer = LoadBalancer(config_path)
         self.logger.info(
-            f"PLLM Client initialized with {len(list(self.balancer._all_clients()))} API clients"
+            f"PLLM Client initialized with {len(list(self.balancer._all_providers()))} API providers"
         )
 
     async def chat(
@@ -40,7 +40,7 @@ class Client:
         retry_policy: str = "fixed",
         provider: Optional[str] = None,
         **kwargs,
-    ) -> Dict[str, Any]:
+    ) -> str:
         """
         发送聊天请求到LLM服务
 
@@ -49,11 +49,11 @@ class Client:
             temperature: 温度参数，控制随机性
             max_tokens: 最大生成token数
             retry_policy: 重试策略（infinite, fixed, retry_once）
-            provider: 指定提供商（openai/siliconflow），None表示自动选择
+            provider: 指定提供商（openai/siliconflow等），None表示自动选择
             **kwargs: 其他参数传递给底层API
 
         Returns:
-            API响应的JSON对象
+            生成的文本内容
         """
         return await self.balancer.execute_request(
             messages=messages,
@@ -136,9 +136,9 @@ class Client:
             retry_policy=retry_policy,
             **kwargs,
         )
-        return response["data"][0]["embedding"]
+        return response
 
-    def chat_sync(self, messages: List[Dict[str, str]], **kwargs) -> Dict[str, Any]:
+    def chat_sync(self, messages: List[Dict[str, str]], **kwargs) -> str:
         """
         同步执行聊天请求
 
@@ -147,7 +147,7 @@ class Client:
             **kwargs: 透传至chat()方法参数（temperature/max_tokens等）
 
         Returns:
-            包含完整响应数据的字典（同chat()方法）
+            生成的文本内容（同chat()方法）
         """
         return asyncio.run(self.chat(messages, **kwargs))
 
@@ -184,25 +184,5 @@ class Client:
         )
 
     def get_stats(self) -> Dict[str, Any]:
-        """获取所有客户端的使用统计信息"""
-        stats = {}
-        # 添加调试日志
-        print(f"Available providers: {self.balancer.clients.keys()}")
-        for provider, clients in self.balancer.clients.items():
-            print(f"Processing provider: {provider} with {len(clients)} clients")
-            provider_stats = []
-            for i, client in enumerate(clients):
-                print(
-                    f"Client {i}: requests={client.total_requests}, tokens={client.total_tokens}"
-                )
-                provider_stats.append(
-                    {
-                        "id": i,
-                        "active": client.is_active,
-                        "error_count": client.error_count,
-                        "total_requests": client.total_requests,
-                        "total_tokens": client.total_tokens,
-                    }
-                )
-            stats[provider] = provider_stats
-        return stats
+        """获取所有Provider的使用统计信息"""
+        return self.balancer.get_stats()

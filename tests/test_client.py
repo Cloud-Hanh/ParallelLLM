@@ -92,7 +92,7 @@ class TestPLLMClient(unittest.IsolatedAsyncioTestCase):
         response = await self.client.chat(messages)
 
         # 验证响应
-        self.assertEqual(response["choices"][0]["message"]["content"], "Chat response")
+        self.assertEqual(response, "Chat response")
 
         # 验证API调用参数
         mock_post.assert_called_once()

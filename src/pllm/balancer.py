@@ -1,307 +1,284 @@
+"""
+重构后的负载均衡器，使用新的Provider架构
+"""
 from typing import Dict, List, Any, Optional
 import time
 import logging
 import asyncio
 import yaml
-from collections import deque
-import os
-from dotenv import load_dotenv
-import aiohttp
 import random
-from openai import AsyncOpenAI
+from collections import deque
 
-
-class LLMClient:
-    """管理单个LLM API客户端，包括速率限制和错误跟踪"""
-
-    def __init__(self, provider: str, config: Dict):
-        self.provider = provider
-        self.config = config
-        self.last_used = 0
-        self.error_count = 0
-        self.is_active = True
-        self.rate_limit = int(config.get("rate_limit", 5))  # 默认每分钟5次请求
-        self.request_queue = deque(maxlen=self.rate_limit)
-        self.total_tokens = 0
-        self.total_requests = 0
-        self.active_requests = 0  # 新增活跃请求计数器
-        self.logger = logging.getLogger(f"pllm.{provider}")
-
-    def is_available(self) -> bool:
-        """检查客户端是否可用"""
-        if not self.is_active:
-            return False
-
-        # 检查速率限制
-        now = time.time()
-        if len(self.request_queue) >= self.rate_limit:
-            oldest = self.request_queue[0]
-            if now - oldest < 60:  # 1分钟窗口
-                return False
-        return True
-
-    def record_usage(self, response: Dict[str, Any]) -> None:
-        """记录API使用情况（仅处理标准LLM响应格式）"""
-        # 仅记录明确包含usage字段的响应
-        if not isinstance(response, dict):
-            usage = response.model_dump().get("usage", {})
-        else:
-            usage = response.get("usage", {})
-
-        self.total_tokens += usage.get("total_tokens", 0)
-        self.total_requests += 1
-
-        # 添加额度预警逻辑
-        quota = self.config.get("quota")
-        if quota and self.total_tokens > quota * 0.8:
-            self.logger.warning(
-                f"API quota nearing limit for {self.provider}: {self.total_tokens}/{quota}"
-            )
-
-        self.request_queue.append(time.time())
-        self.last_used = time.time()
-
-    def mark_error(self, error: Exception) -> None:
-        """标记错误并更新客户端状态"""
-        self.error_count += 1
-        self.logger.error(f"API error with {self.provider}: {str(error)}")
-
-        if self.error_count > 3:  # 连续3次错误后标记为不可用
-            self.is_active = False
-            self.logger.warning(
-                f"LLM client {self.provider} marked as inactive due to errors"
-            )
+from .providers import (
+    BaseProvider, 
+    ProviderConfig, 
+    ChatMessage, 
+    RequestParams, 
+    EmbeddingParams,
+    get_provider_class
+)
 
 
 class LoadBalancer:
-    """智能负载均衡器，管理多个LLM API端点"""
-
+    """智能负载均衡器，管理多个LLM Provider"""
+    
     def __init__(self, config_path: str):
-        self.clients: Dict[str, List[LLMClient]] = {}
+        self.providers: Dict[str, List[BaseProvider]] = {}
         self.logger = logging.getLogger("pllm.balancer")
         self.load_config(config_path)
         self.start_health_check()
-
+    
     def load_config(self, config_path: str) -> None:
         """加载并解析YAML配置文件，支持每个提供商有多个API密钥"""
         try:
             with open(config_path, "r", encoding="utf-8") as f:
                 config = yaml.safe_load(f)
-
-            # 初始化每个提供商的客户端
+            
+            # 初始化每个提供商的Provider实例
             llm_config = config.get("llm", {})
             if not llm_config:
                 raise ValueError("Missing 'llm' section in config")
-
+            
             providers_str = llm_config.get("use", "")
             if not providers_str:
                 raise ValueError("No providers specified in config")
-
+            
             self.active_providers = [p.strip() for p in providers_str.split(",")]
-            self.clients = {}  # 确保初始化clients字典
-
-            # 修复：遍历所有支持的provider配置
-            for provider in self.active_providers:
-                provider_configs = llm_config.get(provider, [])
+            self.providers = {}
+            
+            # 遍历所有支持的provider配置
+            for provider_name in self.active_providers:
+                provider_configs = llm_config.get(provider_name, [])
                 if not provider_configs:
-                    raise ValueError(f"No configuration found for provider: {provider}")
-
+                    raise ValueError(f"No configuration found for provider: {provider_name}")
+                
                 # 支持单配置和多配置格式
                 if isinstance(provider_configs, dict):
                     provider_configs = [provider_configs]
-
-                self.clients[provider] = [
-                    LLMClient(provider, cfg) for cfg in provider_configs
-                ]
+                
+                # 获取Provider类并创建实例
+                provider_class = get_provider_class(provider_name)
+                provider_instances = []
+                
+                for config_dict in provider_configs:
+                    # 创建ProviderConfig实例
+                    provider_config = ProviderConfig(
+                        api_key=config_dict["api_key"],
+                        api_base=config_dict["api_base"],
+                        model=config_dict["model"],
+                        rate_limit=config_dict.get("rate_limit", 5),
+                        quota=config_dict.get("quota"),
+                        headers=config_dict.get("headers"),
+                        extra_params=config_dict.get("extra_params")
+                    )
+                    
+                    # 创建Provider实例
+                    provider_instance = provider_class(provider_config)
+                    provider_instances.append(provider_instance)
+                
+                self.providers[provider_name] = provider_instances
                 self.logger.info(
-                    f"Initialized {len(provider_configs)} clients for {provider}"
+                    f"Initialized {len(provider_instances)} providers for {provider_name}"
                 )
-
+        
         except Exception as e:
             self.logger.error(f"Config load failed: {str(e)}")
             raise
-
-    def get_best_client(self, provider: Optional[str] = None) -> LLMClient:
-        """获取最佳客户端，支持指定提供商"""
+    
+    def get_best_provider(self, provider_name: Optional[str] = None) -> BaseProvider:
+        """获取最佳Provider，支持指定提供商"""
         candidates = []
-
-        # 如果指定了提供商，只在该提供商的客户端中选择
-        target_providers = [provider] if provider else self.active_providers
-
+        
+        # 如果指定了提供商，只在该提供商的Provider中选择
+        target_providers = [provider_name] if provider_name else self.active_providers
+        
         for provider in target_providers:
-            for client in self.clients.get(provider, []):
-                if client.is_available():
-                    # 新的评分标准（数值越大优先级越高）：
-                    # 1. 活跃请求数最少（负值使更少请求的客户端得分更高）
+            for provider_instance in self.providers.get(provider, []):
+                if provider_instance.is_available():
+                    # 评分标准（数值越大优先级越高）：
+                    # 1. 活跃请求数最少
                     # 2. 错误计数最少
                     # 3. 速率限制余量最多
                     # 4. 最近使用时间最久远
                     score = (
-                        -client.active_requests * 1000,  # 主要因素
-                        -client.error_count * 100,
-                        (client.rate_limit - len(client.request_queue)) * 10,
-                        -client.last_used,  # 次要因素
+                        -provider_instance.active_requests * 1000,  # 主要因素
+                        -provider_instance.error_count * 100,
+                        (provider_instance.config.rate_limit - len(provider_instance.request_queue)) * 10,
+                        -provider_instance.last_used,  # 次要因素
                     )
-                    candidates.append((score, client))
-
+                    candidates.append((score, provider_instance))
+        
         if candidates:
             # 找到最高分
             max_score = max(candidates, key=lambda x: x[0])[0]
-            # 收集所有达到最高分的客户端
+            # 收集所有达到最高分的Provider
             best_candidates = [
-                client for score, client in candidates if score == max_score
+                provider for score, provider in candidates if score == max_score
             ]
             # 随机选择一个
-            best_client = random.choice(best_candidates)
-            best_client.active_requests += 1  # 预占请求槽位
-            return best_client
-        raise Exception("No available LLM clients")
-
+            best_provider = random.choice(best_candidates)
+            best_provider.active_requests += 1  # 预占请求槽位
+            return best_provider
+        
+        raise Exception("No available LLM providers")
+    
     async def execute_request(
         self,
         messages: List[Dict[str, str]],
         provider: Optional[str] = None,
         retry_policy: str = "fixed",
         **kwargs,
-    ) -> Dict[str, Any]:
+    ) -> str:
         """执行请求，支持指定提供商和重试策略"""
         max_retries = 3
         retries = 0
         last_error = None
-
+        
         while True:
+            provider_instance = None
             try:
-                client = self.get_best_client(provider)
-                self.logger.debug(f"Selected client: {client.provider}")
-
-                # 使用官方SDK进行调用
-                if client.provider == "openai":
-                    response = await self._call_openai(client, messages, **kwargs)
-                elif client.provider == "siliconflow":
-                    response = await self._call_siliconflow(client, messages, **kwargs)
-                else:
-                    raise ValueError(f"Unsupported provider: {client.provider}")
-
-                client.record_usage(response)
-                response = response["choices"][0]["message"]["content"]
-
-                return response
-
+                provider_instance = self.get_best_provider(provider)
+                self.logger.debug(f"Selected provider: {provider_instance.provider_name}")
+                
+                # 检查Provider是否支持聊天
+                if not provider_instance.supports_chat:
+                    raise ValueError(f"Provider {provider_instance.provider_name} does not support chat")
+                
+                # 转换消息格式
+                chat_messages = [ChatMessage(role=msg["role"], content=msg["content"]) for msg in messages]
+                
+                # 构建请求参数
+                request_params = RequestParams(
+                    messages=chat_messages,
+                    temperature=kwargs.get("temperature"),
+                    max_tokens=kwargs.get("max_tokens"),
+                    stream=kwargs.get("stream"),
+                    stop=kwargs.get("stop"),
+                    top_p=kwargs.get("top_p"),
+                    top_k=kwargs.get("top_k"),
+                    frequency_penalty=kwargs.get("frequency_penalty"),
+                    presence_penalty=kwargs.get("presence_penalty"),
+                    response_format=kwargs.get("response_format"),
+                    tools=kwargs.get("tools"),
+                    extra_params={k: v for k, v in kwargs.items() 
+                                if k not in ["temperature", "max_tokens", "stream", "stop", 
+                                           "top_p", "top_k", "frequency_penalty", "presence_penalty",
+                                           "response_format", "tools"]}
+                )
+                
+                # 执行API调用
+                response = await provider_instance.chat(request_params)
+                provider_instance.record_usage(response)
+                
+                return response.content
+                
             except Exception as e:
                 retries += 1
                 last_error = e
-                client.mark_error(e)
-
+                
+                if provider_instance:
+                    provider_instance.mark_error(e)
+                
                 if retry_policy == "fixed":
                     if retries >= max_retries:
                         self.logger.error(f"All retries failed (policy={retry_policy})")
                         raise Exception(f"Failed after {retries} retries: {str(e)}")
                     self.logger.warning(f"Retry {retries}/{max_retries}")
-
+                
                 elif retry_policy == "infinite":
                     self.logger.warning(
                         f"Retry {retries} (infinite mode), last error: {str(e)}"
                     )
                     await asyncio.sleep(1)
-
+                
+                elif retry_policy == "retry_once":
+                    if retries >= 1:
+                        self.logger.error(f"Single retry failed (policy={retry_policy})")
+                        raise Exception(f"Failed after {retries} retries: {str(e)}")
+                    self.logger.warning(f"Retry {retries}/1")
+                
                 else:
                     raise ValueError(f"Invalid retry policy: {retry_policy}")
-
-    async def _call_openai(
-        self, client: LLMClient, messages: List[Dict[str, str]], **kwargs
-    ) -> Dict[str, Any]:
-        """使用OpenAI官方SDK进行调用"""
-        openai_client = AsyncOpenAI(
-            api_key=client.config["api_key"], base_url=client.config["api_base"]
-        )
-
-        # 构建请求参数
-        params = {
-            "model": client.config["model"],
-            "prompt": messages[0]["content"],
-            "max_tokens": kwargs.get("max_tokens", 4096),
-            "temperature": kwargs.get("temperature", 0.7),
-            "stream": kwargs.get("stream", False),
-        }
-
-        # 执行调用
-        response = await openai_client.chat.completions.create(**params)
-        return response
-
-    async def _call_siliconflow(
-        self, client: LLMClient, messages: List[Dict[str, str]], **kwargs
-    ) -> Dict[str, Any]:
-        """调用特定客户端的API（适配Siliconflow参数规范）"""
-        request_params = {
-            "model": client.config["model"],
-            "messages": messages,
-            "stream": kwargs.get("stream", False),
-            "max_tokens": kwargs.get("max_tokens", 4096),
-            "stop": kwargs.get("stop"),
-            "response_format": kwargs.get("response_format"),
-            "tools": kwargs.get("tools"),
-        }
-
-        # 清理空值参数
-        request_params = {k: v for k, v in request_params.items() if v is not None}
-
-        # 添加其他自定义参数（排除已明确处理的参数）
-        reserved_params = {
-            "temperature",
-            "top_p",
-            "top_k",
-            "frequency_penalty",
-            "stream",
-            "max_tokens",
-            "stop",
-            "response_format",
-            "tools",
-        }
-        for key, value in kwargs.items():
-            if key not in reserved_params and value is not None:
-                request_params[key] = value
-
-        # 执行API调用
-        async with aiohttp.ClientSession() as session:
-            headers = {
-                "Authorization": f"Bearer {client.config['api_key']}",
-                "Content-Type": "application/json",
-            }
-
-            if "headers" in client.config:
-                headers.update(client.config["headers"])
-
-            async with session.post(
-                client.config["api_base"],
-                headers=headers,
-                json=request_params,
-                timeout=None,  # 移除固定超时限制
-            ) as response:
-                try:
-                    if response.status != 200:
-                        error_text = (
-                            await response.text()
-                        ).strip() or "No error message"
-                        raise Exception(
-                            f"API request failed: {response.status}, {error_text}"
+    
+    async def execute_embedding_request(
+        self, 
+        input_text: str, 
+        retry_policy: str = "fixed", 
+        provider: Optional[str] = None,
+        **kwargs
+    ) -> List[float]:
+        """执行Embedding请求"""
+        max_retries = 3
+        retries = 0
+        last_error = None
+        
+        while True:
+            provider_instance = None
+            try:
+                provider_instance = self.get_best_provider(provider)
+                self.logger.debug(f"Selected provider for embedding: {provider_instance.provider_name}")
+                
+                # 检查Provider是否支持embedding
+                if not provider_instance.supports_embedding:
+                    raise ValueError(f"Provider {provider_instance.provider_name} does not support embedding")
+                
+                # 构建请求参数
+                embedding_params = EmbeddingParams(
+                    input_text=input_text,
+                    encoding_format=kwargs.get("encoding_format", "float"),
+                    extra_params={k: v for k, v in kwargs.items() if k != "encoding_format"}
+                )
+                
+                # 执行API调用
+                response = await provider_instance.embedding(embedding_params)
+                provider_instance.record_usage(response)
+                
+                return response.embedding
+                
+            except Exception as e:
+                retries += 1
+                last_error = e
+                
+                if provider_instance:
+                    provider_instance.mark_error(e)
+                
+                if retry_policy == "fixed":
+                    if retries >= max_retries:
+                        self.logger.error(
+                            f"All embedding retries failed (policy={retry_policy})"
                         )
-                    return await response.json()
-                finally:
-                    client.active_requests -= 1  # 确保请求计数正确释放
-
+                        raise Exception(
+                            f"Embedding failed after {retries} retries: {str(e)}"
+                        )
+                    self.logger.warning(f"Embedding retry {retries}/{max_retries}")
+                
+                elif retry_policy == "infinite":
+                    self.logger.warning(
+                        f"Embedding retry {retries} (infinite mode), last error: {str(e)}"
+                    )
+                    await asyncio.sleep(1)
+                
+                elif retry_policy == "retry_once":
+                    if retries >= 1:
+                        self.logger.error(f"Single embedding retry failed (policy={retry_policy})")
+                        raise Exception(f"Embedding failed after {retries} retries: {str(e)}")
+                    self.logger.warning(f"Embedding retry {retries}/1")
+                
+                else:
+                    raise ValueError(f"Invalid retry policy: {retry_policy}")
+    
     def start_health_check(self) -> None:
         """启动定期健康检查任务"""
-
+        
         async def check():
             while True:
                 await asyncio.sleep(300)  # 每5分钟检查一次
                 self.logger.debug("Running health check")
-                for client in self._all_clients():
-                    if not client.is_active:
-                        client.error_count = 0
-                        client.is_active = True
-                        self.logger.info(f"Reactivated client: {client.provider}")
-
+                for provider_instance in self._all_providers():
+                    if not provider_instance.is_active:
+                        provider_instance.reset_error_count()
+                        self.logger.info(f"Reactivated provider: {provider_instance.provider_name}")
+        
         # 检查是否有运行中的事件循环，如果没有则不启动健康检查
         try:
             asyncio.get_running_loop()
@@ -313,101 +290,28 @@ class LoadBalancer:
             )
             # 存储协程以便稍后手动启动
             self._health_check_coro = check
-
-    def _all_clients(self) -> List[LLMClient]:
-        """
-        获取所有客户端的生成器
-
-        Returns:
-            所有已初始化的LLM客户端的生成器
-        """
-        for provider_clients in self.clients.values():
-            for client in provider_clients:
-                yield client
-
-    async def execute_embedding_request(
-        self, input_text: str, retry_policy: str = "fixed", **kwargs
-    ) -> Dict[str, Any]:
-        """执行Embedding请求"""
-        max_retries = 3
-        retries = 0
-        last_error = None
-
-        while True:
-            try:
-                client = self.get_best_client()
-                self.logger.debug(f"Selected client for embedding: {client.provider}")
-                response = await self._call_embedding_api(client, input_text, **kwargs)
-                client.record_usage(response)
-                return response
-
-            except Exception as e:
-                retries += 1
-                last_error = e
-                client.mark_error(e)
-
-                if retry_policy == "fixed":
-                    if retries >= max_retries:
-                        self.logger.error(
-                            f"All embedding retries failed (policy={retry_policy})"
-                        )
-                        raise Exception(
-                            f"Embedding failed after {retries} retries: {str(e)}"
-                        )
-                    self.logger.warning(f"Embedding retry {retries}/{max_retries}")
-
-                elif retry_policy == "infinite":
-                    self.logger.warning(
-                        f"Embedding retry {retries} (infinite mode), last error: {str(e)}"
-                    )
-                    await asyncio.sleep(1)
-
-                else:
-                    raise ValueError(f"Invalid retry policy: {retry_policy}")
-
-    async def _call_embedding_api(
-        self, client: LLMClient, input_text: str, **kwargs
-    ) -> Dict[str, Any]:
-        """调用特定客户端的Embedding API"""
-        request_params = {
-            "model": client.config["model"],
-            "input": input_text,
-            "encoding_format": kwargs.get("encoding_format", "float"),
-        }
-
-        # 清理空值参数
-        request_params = {k: v for k, v in request_params.items() if v is not None}
-
-        # 添加其他自定义参数
-        reserved_params = {"encoding_format"}
-        for key, value in kwargs.items():
-            if key not in reserved_params and value is not None:
-                request_params[key] = value
-
-        # 执行API调用
-        async with aiohttp.ClientSession() as session:
-            headers = {
-                "Authorization": f"Bearer {client.config['api_key']}",
-                "Content-Type": "application/json",
-            }
-
-            if "headers" in client.config:
-                headers.update(client.config["headers"])
-
-            async with session.post(
-                client.config["api_base"],
-                headers=headers,
-                json=request_params,
-                timeout=None,
-            ) as response:
-                try:
-                    if response.status != 200:
-                        error_text = (
-                            await response.text()
-                        ).strip() or "No error message"
-                        raise Exception(
-                            f"Embedding API failed: {response.status}, {error_text}"
-                        )
-                    return await response.json()
-                finally:
-                    client.active_requests -= 1
+    
+    def _all_providers(self) -> List[BaseProvider]:
+        """获取所有Provider实例"""
+        for provider_instances in self.providers.values():
+            for provider_instance in provider_instances:
+                yield provider_instance
+    
+    def get_stats(self) -> Dict[str, Any]:
+        """获取所有Provider的使用统计信息"""
+        stats = {}
+        for provider_name, provider_instances in self.providers.items():
+            provider_stats = []
+            for i, provider_instance in enumerate(provider_instances):
+                provider_stats.append({
+                    "id": i,
+                    "active": provider_instance.is_active,
+                    "error_count": provider_instance.error_count,
+                    "total_requests": provider_instance.total_requests,
+                    "total_tokens": provider_instance.total_tokens,
+                    "model": provider_instance.config.model,
+                    "supports_chat": provider_instance.supports_chat,
+                    "supports_embedding": provider_instance.supports_embedding,
+                })
+            stats[provider_name] = provider_stats
+        return stats

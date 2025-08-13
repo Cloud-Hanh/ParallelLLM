@@ -1,0 +1,42 @@
+llm:
+  use: openai, siliconflow, anthropic, google, deepseek, zhipu
+  
+  openai:
+    - api_key: "sk-your-openai-key"
+      api_base: "https://api.openai.com/v1"
+      model: "gpt-4o-mini"
+      rate_limit: 20
+    
+  siliconflow:
+    - api_key: "sk-xxx"
+      api_base: "https://api.siliconflow.cn/v1/chat/completions"
+      model: "deepseek-ai/DeepSeek-V2.5"
+      rate_limit: 20
+    - api_key: "sk-xxx-2"
+      api_base: "https://api.siliconflow.cn/v1/chat/completions"
+      model: "Qwen/Qwen2.5-72B-Instruct"
+      rate_limit: 20
+  
+  anthropic:
+    - api_key: "sk-ant-your-key"
+      api_base: "https://api.anthropic.com"
+      model: "claude-3-5-sonnet-20241022"
+      rate_limit: 15
+  
+  google:
+    - api_key: "your-gemini-api-key"
+      api_base: "https://generativelanguage.googleapis.com"
+      model: "gemini-1.5-flash"
+      rate_limit: 15
+  
+  deepseek:
+    - api_key: "sk-your-deepseek-key"
+      api_base: "https://api.deepseek.com/v1/chat/completions"
+      model: "deepseek-chat"
+      rate_limit: 10
+  
+  zhipu:
+    - api_key: "your-zhipu-api-key"
+      api_base: "https://open.bigmodel.cn/api/paas/v4/chat/completions"
+      model: "glm-4"
+      rate_limit: 10
