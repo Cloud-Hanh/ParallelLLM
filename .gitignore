@@ -10,16 +10,22 @@ venv/
 .conda
 .tmp
 .DS_Store
-.vscode
 *.log
 *.logs
 **/*.egg-info
+
+# VSCode
+.vscode
 
 # PyCharm
 .idea/
 
 # Cursor
 .cursorrules
+
+# Claude
+.claude/
+CLAUDE.md
 
 # Jupyter notebook
 .ipynb_checkpoints/
