@@ -1,4 +1,22 @@
-# 测试文档
+# ParallelLLM 测试指南
+
+欢迎查看 ParallelLLM 的测试指南！本文档详细说明如何运行和理解项目的测试套件。
+
+## 快速开始
+
+**最常用的测试命令：**
+
+```bash
+# 运行单元测试（不需要API密钥，最快）
+python tests/run_tests.py --unit
+
+# 运行所有测试
+python tests/run_tests.py --all
+
+# 运行集成测试（需要真实API密钥）
+export SILICONFLOW_API_KEY="your-api-key"
+python tests/run_tests.py --integration
+```
 
 ## 测试架构概述
 
@@ -113,25 +131,44 @@ mock_error_response(status=500, message="错误信息")
 
 ## 运行测试
 
-### 快速开始
+### 开发者常用命令
+
 ```bash
-# 运行所有单元测试（推荐）
+# 最基础：运行单元测试（无需API密钥，速度最快）
 python tests/run_tests.py --unit
 
-# 运行所有测试
-python tests/run_tests.py --all
+# 开发时：运行核心客户端测试
+python -m unittest tests.test_client.TestPLLMClient
 
-# 运行集成测试（需要API密钥）
-export SILICONFLOW_API_KEY="your-key"
-python tests/run_tests.py --integration
+# 调试时：运行单个测试方法并查看详细输出
+python -m unittest tests.test_client.TestPLLMClient.test_generate -v
+
+# 集成测试：验证实际API调用（需要真实密钥）
+export SILICONFLOW_API_KEY="your-api-key"
+python tests/manual_test.py
+
+# 完整测试：运行所有测试
+python tests/run_tests.py --all
+```
+
+### 测试环境设置
+
+**前置条件：**
+```bash
+# 安装项目依赖
+pip install -e .
+pip install -r requirements.txt
+
+# 设置API密钥（仅集成测试需要）
+export SILICONFLOW_API_KEY="your-siliconflow-api-key"
 ```
 
 ### 详细测试选项
 ```bash
-# 帮助信息
+# 查看所有可用选项
 python tests/run_tests.py --help
 
-# 详细输出
+# 详细输出模式
 python tests/run_tests.py --unit --verbose
 
 # 运行特定测试文件
@@ -140,6 +177,9 @@ python -m unittest tests.test_client.TestPLLMClient.test_generate
 
 # 运行单个测试方法
 python -m unittest tests.test_client.TestPLLMClient.test_chat
+
+# 使用标准unittest运行器（CLAUDE.md推荐）
+python -m unittest tests/test_client.py
 ```
 
 ## 测试覆盖范围
@@ -165,22 +205,71 @@ python -m unittest tests.test_client.TestPLLMClient.test_chat
 - ✅ 健康检查系统
 - ✅ 并发请求处理
 
+## 常见问题解决
+
+### 测试失败常见原因
+
+**1. 模块导入错误**
+```bash
+# 错误：ModuleNotFoundError: No module named 'pllm'
+# 解决：确保项目已正确安装
+pip install -e .
+```
+
+**2. API密钥相关错误**
+```bash
+# 错误：集成测试跳过或失败
+# 解决：设置正确的环境变量
+export SILICONFLOW_API_KEY="your-real-api-key"
+```
+
+**3. 异步测试错误**
+```bash
+# 错误：RuntimeError: cannot be called from a running event loop
+# 解决：使用正确的异步测试基类（代码中已处理）
+```
+
+**4. 临时文件清理问题**
+```bash
+# 如果遇到权限或文件锁定问题，检查临时目录
+# 测试会自动清理，但可以手动清理 /tmp/test_* 目录
+```
+
+### 调试技巧
+
+```bash
+# 1. 启用详细日志
+python -m unittest tests.test_client.TestPLLMClient.test_generate -v
+
+# 2. 查看具体错误堆栈
+python -m unittest tests/test_client.py 2>&1 | head -50
+
+# 3. 运行单个测试类
+python -m unittest tests.test_client.TestPLLMClient
+
+# 4. 使用Python调试器
+python -m pdb -m unittest tests.test_client.TestPLLMClient.test_generate
+```
+
 ## 注意事项
 
 ### API密钥管理
-- 单元测试不需要真实密钥
-- 集成测试需要设置 `SILICONFLOW_API_KEY` 环境变量
-- 其他提供商的测试使用mock密钥，可以编写但暂时不会实际调用
+- **单元测试**：不需要真实密钥，使用Mock响应
+- **集成测试**：需要设置 `SILICONFLOW_API_KEY` 环境变量  
+- **其他提供商**：目前主要用Mock密钥进行测试
+- **安全提醒**：永远不要将真实API密钥提交到代码仓库
 
-### 测试隔离
+### 测试隔离和性能
 - 每个测试类使用独立的临时配置文件
-- 异步测试使用 `IsolatedAsyncioTestCase`
-- 健康检查任务会在测试结束时正确清理
+- 异步测试使用 `IsolatedAsyncioTestCase` 确保隔离
+- 健康检查任务在测试结束时会正确清理
+- 单元测试速度很快，集成测试较慢（涉及真实API调用）
 
-### 错误处理
-- 测试会验证异常被正确抛出
-- 错误恢复能力通过故障转移测试验证
-- 统计信息会记录错误计数
+### 开发最佳实践
+- **开发新功能时**：先写/运行相关单元测试
+- **修复Bug时**：运行对应的测试确保修复有效
+- **发布前**：运行完整测试套件确保无回归
+- **CI/CD集成**：主要依赖单元测试，集成测试可选
 
 ## 持续集成
 
