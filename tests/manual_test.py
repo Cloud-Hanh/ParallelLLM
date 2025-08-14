@@ -1,3 +1,11 @@
+"""
+测试目标: 手动集成测试 - 需要真实API密钥
+- 测试与真实API服务的连接和交互
+- 验证完整的请求-响应流程
+- 测试真实的错误处理和重试机制
+- 需要设置环境变量 SILICONFLOW_API_KEY
+- 包含聊天、生成和embedding功能的端到端测试
+"""
 import unittest
 import asyncio
 import logging

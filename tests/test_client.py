@@ -1,3 +1,11 @@
+"""
+测试目标: PLLM Client核心功能测试
+- 测试客户端的基本聊天和生成功能
+- 测试同步和异步接口
+- 测试embedding功能
+- 使用Mock API调用，不需要真实API密钥
+- 包含错误处理和边缘情况测试
+"""
 import unittest
 from unittest.mock import AsyncMock, patch, MagicMock
 import asyncio
@@ -28,21 +36,11 @@ class TestPLLMClient(unittest.IsolatedAsyncioTestCase):
         self.config_path = TestConfig.write_temp_config(self.config)
         self.client = Client(self.config_path)
 
-        # 启动健康检查任务
-        if hasattr(self.client.balancer, "_health_check_coro"):
-            self.health_check_task = asyncio.create_task(
-                self.client.balancer._health_check_coro()
-            )
+        # 不启动健康检查任务，避免测试挂起
+        # 健康检查在单元测试中不是必需的
 
     async def asyncTearDown(self):
-        # 取消健康检查任务
-        if hasattr(self, "health_check_task"):
-            self.health_check_task.cancel()
-            try:
-                await self.health_check_task
-            except asyncio.CancelledError:
-                pass
-
+        # 清理资源
         self.temp_dir.cleanup()
         if os.path.exists(self.config_path):
             os.unlink(self.config_path)

@@ -3,6 +3,7 @@
 [![Python 3.8+](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://www.python.org/downloads/)
 
 A parallel Large Language Model invocation framework providing:
+
 - Load balancing across multiple LLM providers
 - Hybrid synchronous/asynchronous interfaces
 - Automatic failover and intelligent retry mechanisms
@@ -14,6 +15,7 @@ A parallel Large Language Model invocation framework providing:
 ```bash
 git clone https://github.com/16131zzzzzzzz/ParallelLLM.git
 cd ParallelLLM
+pip install -r requirements.txt
 pip install -e .
 ```
 
@@ -25,14 +27,14 @@ pip install -e .
 llm:
   use: siliconflow
   siliconflow:
-    - api_key: "sk-xxx"
-      api_base: "https://api.siliconflow.cn/v1/chat/completions"
-      model: "model name"
+    - api_key: 'sk-xxx'
+      api_base: 'https://api.siliconflow.cn/v1/chat/completions'
+      model: 'model name'
       rate_limit: 20
-    
-    - api_key: "sk-xxx"
-      api_base: "https://api.siliconflow.cn/v1/chat/completions"
-      model: "model name"
+
+    - api_key: 'sk-xxx'
+      api_base: 'https://api.siliconflow.cn/v1/chat/completions'
+      model: 'model name'
       rate_limit: 20
 ```
 
@@ -49,6 +51,7 @@ client = Client("examples/example_config.yaml")
 #### 2. Common Synchronous Methods
 
 ##### 2.1 Text Generation - `invoke()` / `generate_sync()`
+
 Generate text from a single prompt:
 
 ```python
@@ -68,6 +71,7 @@ print(response)
 ```
 
 ##### 2.2 Batch Processing - `invoke_batch()`
+
 Process multiple prompts in parallel:
 
 ```python
@@ -80,7 +84,7 @@ questions = [
 ]
 
 results = client.invoke_batch(
-    questions, 
+    questions,
     retry_policy="fixed",
     temperature=0.6
 )
@@ -91,6 +95,7 @@ for i, result in enumerate(results):
 ```
 
 ##### 2.3 Text Embeddings - `embedding_sync()`
+
 Generate text embeddings for vector similarity:
 
 ```python
@@ -123,12 +128,13 @@ for provider, clients in stats.items():
 ### Asynchronous Methods
 
 #### Text Generation - `generate()`
+
 ```python
 import asyncio
 
 async def example_generate():
     response = await client.generate(
-        "解释一下量子计算的基本原理", 
+        "解释一下量子计算的基本原理",
         retry_policy="infinite",
         temperature=0.5
     )
@@ -138,6 +144,7 @@ asyncio.run(example_generate())
 ```
 
 #### Text Embeddings - `embedding()`
+
 ```python
 async def example_embedding():
     embedding = await client.embedding(
@@ -152,6 +159,7 @@ asyncio.run(example_embedding())
 ```
 
 ### Parallel Processing
+
 Process multiple requests simultaneously:
 
 ```python
@@ -162,7 +170,7 @@ async def parallel_processing():
         client.generate("什么是自然语言处理？"),
         client.embedding("向量化这段文本")
     ]
-    
+
     results = await asyncio.gather(*tasks, return_exceptions=True)
     return results
 
@@ -170,27 +178,29 @@ results = asyncio.run(parallel_processing())
 ```
 
 ### Error Handling with Retry Policies
+
 ```python
 # Infinite retry until success
 response = await client.generate(
-    "重要的请求，必须成功", 
+    "重要的请求，必须成功",
     retry_policy="infinite"
 )
 
 # Fixed number of retries
 response = await client.generate(
-    "普通请求", 
+    "普通请求",
     retry_policy="fixed"
 )
 
 # Only retry once
 response = await client.generate(
-    "简单请求", 
+    "简单请求",
     retry_policy="retry_once"
 )
 ```
 
 ### Provider-Specific Requests
+
 ```python
 # Force use specific provider
 response = await client.generate(
