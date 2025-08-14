@@ -1,11 +1,12 @@
 import unittest
 import asyncio
 import logging
+import os
 from pllm import Client
 
 
 class TestClientFunctionality(unittest.IsolatedAsyncioTestCase):
-    """客户端基础功能测试套件"""
+    """客户端基础功能测试套件 - 需要真实API密钥"""
 
     @classmethod
     def setUpClass(cls):
@@ -14,20 +15,34 @@ class TestClientFunctionality(unittest.IsolatedAsyncioTestCase):
             level=logging.DEBUG,
             format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         )
-        cls.logger = logging.getLogger("TestClient")  # 创建类级别日志器
+        cls.logger = logging.getLogger("TestClient")
+        
+        # 检查是否有SiliconFlow API密钥
+        cls.has_real_key = bool(os.getenv("SILICONFLOW_API_KEY"))
+        if not cls.has_real_key:
+            cls.logger.warning("No SILICONFLOW_API_KEY found. Tests will be skipped.")
 
     async def asyncSetUp(self):
         """每个测试方法前的初始化"""
+        if not self.has_real_key:
+            self.skipTest("No real API key available")
+        
         self.client = Client("input/config/base.yaml", log_level=logging.DEBUG)
 
     async def test_basic_functionality(self):
         """测试生成和聊天基础功能"""
         try:
+            self.logger.info("开始测试基础功能")
+            
             # 测试生成功能
+            self.logger.info("测试generate方法")
             response = await self.client.generate("解释什么是机器学习")
             self.assertIsInstance(response, str)
+            self.assertGreater(len(response), 10)  # 响应应该有实际内容
+            self.logger.info(f"Generate响应长度: {len(response)}")
 
             # 测试聊天功能
+            self.logger.info("测试chat方法")
             chat_response = await self.client.chat(
                 [
                     {"role": "system", "content": "你是一个有用的AI助手"},
@@ -37,7 +52,9 @@ class TestClientFunctionality(unittest.IsolatedAsyncioTestCase):
                     },
                 ]
             )
-            self.logger.debug("聊天响应示例：%s", chat_response)  # 使用正确日志器
+            self.assertIsInstance(chat_response, str)
+            self.assertGreater(len(chat_response), 10)
+            self.logger.debug("聊天响应示例：%s", chat_response[:100] + "...")  # 只显示前100字符
 
             # 验证统计信息
             stats = self.client.get_stats()
@@ -60,6 +77,8 @@ class TestClientFunctionality(unittest.IsolatedAsyncioTestCase):
             self.assertGreaterEqual(
                 total_tokens, 50, f"总token数不足，当前：{total_tokens}"
             )
+            
+            self.logger.info(f"测试完成 - 总请求数: {total_requests}, 总tokens: {total_tokens}")
 
         except Exception as e:
             self.logger.error("测试失败，当前统计信息：%s", stats, exc_info=True)
