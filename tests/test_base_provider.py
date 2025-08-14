@@ -178,4 +178,4 @@ class BaseProviderTest(unittest.IsolatedAsyncioTestCase, ABC):
                 self.assertIn("total_requests", client_stat)
                 self.assertIn("total_tokens", client_stat)
                 self.assertIn("error_count", client_stat)
-                self.assertIn("is_active", client_stat)
+                self.assertIn("active", client_stat)
