@@ -7,6 +7,32 @@ import yaml
 from .balancer import LoadBalancer
 
 
+def _run_async(coro):
+    """Helper function to run async code from sync context"""
+    try:
+        # If we're already in an event loop, we can't use asyncio.run()
+        loop = asyncio.get_running_loop()
+        # Create a new thread with a new event loop
+        import concurrent.futures
+        import threading
+        
+        def run_in_thread():
+            new_loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(new_loop)
+            try:
+                return new_loop.run_until_complete(coro)
+            finally:
+                new_loop.close()
+        
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future = executor.submit(run_in_thread)
+            return future.result()
+            
+    except RuntimeError:
+        # No event loop running, use asyncio.run()
+        return asyncio.run(coro)
+
+
 class Client:
     """
     PLLM Client - 并行LLM调用客户端
@@ -109,7 +135,7 @@ class Client:
             tasks = [self.generate(prompt, retry_policy=retry_policy, **kwargs) for prompt in prompts]
             results = await asyncio.gather(*tasks)
             return results
-        return asyncio.run(runner())
+        return _run_async(runner())
 
     async def embedding(
         self,
@@ -149,7 +175,7 @@ class Client:
         Returns:
             生成的文本内容（同chat()方法）
         """
-        return asyncio.run(self.chat(messages, **kwargs))
+        return _run_async(self.chat(messages, **kwargs))
 
     def generate_sync(self, prompt: str, retry_policy: str = "fixed", **kwargs) -> str:
         """
@@ -163,7 +189,7 @@ class Client:
         Returns:
             生成的文本内容（同generate()方法）
         """
-        return asyncio.run(self.generate(prompt, retry_policy=retry_policy, **kwargs))
+        return _run_async(self.generate(prompt, retry_policy=retry_policy, **kwargs))
 
     def embedding_sync(
         self, text: str, encoding_format: str = "float", **kwargs
@@ -179,7 +205,7 @@ class Client:
         Returns:
             embedding向量列表
         """
-        return asyncio.run(
+        return _run_async(
             self.embedding(text, encoding_format=encoding_format, **kwargs)
         )
 
