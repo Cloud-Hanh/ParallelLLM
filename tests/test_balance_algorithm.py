@@ -141,7 +141,7 @@ class TestBalanceAlgorithm(unittest.IsolatedAsyncioTestCase):
         # 人为填充速率限制队列
         current_time = time.time()
         for _ in range(19):  # 接近20的限制
-            target_provider.request_times.append(current_time)
+            target_provider.request_queue.append(current_time)
         
         # 执行请求，应该能够处理速率限制
         response = await self.client.generate("Test rate limiting")
@@ -150,7 +150,7 @@ class TestBalanceAlgorithm(unittest.IsolatedAsyncioTestCase):
         self.assertIsInstance(response, str)
         self.assertGreater(len(response), 0)
         
-        print(f"Rate limit queue length: {len(target_provider.request_times)}")
+        print(f"Rate limit queue length: {len(target_provider.request_queue)}")
         print(f"Response received: {response[:50]}...")
         print("✓ Rate limit handling works correctly")
     
