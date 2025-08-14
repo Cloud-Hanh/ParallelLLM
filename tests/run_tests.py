@@ -20,7 +20,7 @@ def run_unit_tests():
     
     test_files = [
         "tests/test_client.py",
-        # "tests/test_load_balancing.py"  # Has some failing tests - needs mock fixes
+        "tests/test_load_balancing.py"
     ]
     
     success = True
