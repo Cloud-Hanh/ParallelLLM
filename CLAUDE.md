@@ -15,14 +15,20 @@ pip install -r requirements.txt
 
 ### Testing
 ```bash
-# Run all tests
-python -m unittest tests/test_client.py
+# Run balance algorithm tests (provider selection, token counting, failover)
+python3 -m unittest tests.test_balance_algorithm -v
+
+# Run client interface tests (invoke, invoke_batch, chat, generate, etc.)
+python3 -m unittest tests.test_client_interface -v
 
 # Run specific test methods
-python -m unittest tests.test_client.TestPLLMClient.test_generate
-python -m unittest tests.test_client.TestPLLMClient.test_chat
+python3 -m unittest tests.test_balance_algorithm.TestBalanceAlgorithm.test_token_counting_accuracy -v
+python3 -m unittest tests.test_client_interface.TestClientInterface.test_invoke_batch_method -v
 
-# Run manual tests (requires valid API keys)
+# Run all new tests
+python3 -m unittest tests.test_balance_algorithm tests.test_client_interface -v
+
+# Legacy manual tests (requires valid API keys)
 python tests/manual_test.py
 python tests/multi_key_test.py
 ```

@@ -209,10 +209,39 @@ response = await client.generate(
 )
 ```
 
-## Test
+## Testing
+
+### Run Tests
 
 ```bash
-python -m unittest tests/test_client.py
+# Run all unit tests (new comprehensive test suite)
+python tests/run_tests.py --unit
+
+# Run balance algorithm tests (provider selection, token counting, failover)
+python -m unittest tests.test_balance_algorithm -v
+
+# Run client interface tests (invoke, invoke_batch, chat, generate, etc.)
+python -m unittest tests.test_client_interface -v
+
+# Run integration tests (requires real API keys)
+python tests/run_tests.py --integration
+
+# Run provider tests (mock tests for all providers)
+python tests/run_tests.py --provider all
+
+# Run specific provider tests
+python tests/run_tests.py --provider openai
+
+# Run all tests
+python tests/run_tests.py --all
+```
+
+### Manual Testing
+
+```bash
+# Manual tests with real API calls (requires valid API keys)
+python tests/manual_test.py
+python tests/multi_key_test.py
 ```
 
 ## TODO

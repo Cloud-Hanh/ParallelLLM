@@ -14,29 +14,35 @@ import glob
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 
-def run_unit_tests():
+def run_unit_tests(verbose=False):
     """运行单元测试（Mock测试）"""
     print("🧪 Running Unit Tests (Mock API calls)...")
     
-    test_files = [
-        "tests/test_client.py",
-        "tests/test_load_balancing.py"
+    test_modules = [
+        "tests.test_balance_algorithm",
+        "tests.test_client_interface"
     ]
     
     success = True
-    for test_file in test_files:
+    for test_module in test_modules:
+        test_file = test_module.replace(".", "/") + ".py"
         if os.path.exists(test_file):
-            print(f"\n📝 Running {test_file}...")
-            result = subprocess.run([sys.executable, "-m", "unittest", test_file], 
-                                  capture_output=True, text=True)
-            
-            if result.returncode != 0:
-                print(f"❌ {test_file} FAILED")
-                print("STDOUT:", result.stdout)
-                print("STDERR:", result.stderr)
-                success = False
+            print(f"\n📝 Running {test_module}...")
+            if verbose:
+                # Run with real-time output for debugging
+                result = subprocess.run([sys.executable, "-m", "unittest", test_module, "-v"])
+                success = success and (result.returncode == 0)
             else:
-                print(f"✅ {test_file} PASSED")
+                result = subprocess.run([sys.executable, "-m", "unittest", test_module], 
+                                      capture_output=True, text=True)
+                
+                if result.returncode != 0:
+                    print(f"❌ {test_module} FAILED")
+                    print("STDOUT:", result.stdout)
+                    print("STDERR:", result.stderr)
+                    success = False
+                else:
+                    print(f"✅ {test_module} PASSED")
         else:
             print(f"⚠️  {test_file} not found, skipping...")
     
@@ -157,7 +163,7 @@ def main():
     success = True
     
     if args.unit:
-        success = run_unit_tests()
+        success = run_unit_tests(args.verbose)
     elif args.integration:
         success = run_integration_tests()
     elif args.provider:
@@ -171,7 +177,7 @@ def main():
         # 默认运行单元测试
         print("No specific test type specified, running unit tests by default...")
         print("Use --help to see all options")
-        success = run_unit_tests()
+        success = run_unit_tests(args.verbose)
     
     sys.exit(0 if success else 1)
 
