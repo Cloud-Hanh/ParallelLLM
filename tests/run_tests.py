@@ -19,8 +19,8 @@ def run_unit_tests(verbose=False):
     print("🧪 Running Unit Tests (Mock API calls)...")
     
     test_modules = [
-        "tests.test_balance_algorithm",
-        "tests.test_client_interface"
+        "tests.test_balance_algorithm_mocked",
+        "tests.test_client_interface_mocked"
     ]
     
     success = True
