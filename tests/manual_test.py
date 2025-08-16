@@ -25,17 +25,22 @@ class TestClientFunctionality(unittest.IsolatedAsyncioTestCase):
         )
         cls.logger = logging.getLogger("TestClient")
         
-        # 检查是否有SiliconFlow API密钥
-        cls.has_real_key = bool(os.getenv("SILICONFLOW_API_KEY"))
-        if not cls.has_real_key:
-            cls.logger.warning("No SILICONFLOW_API_KEY found. Tests will be skipped.")
+        # 检查配置文件是否存在
+        cls.config_path = "input/config/pllm.yaml"
+        if not os.path.exists(cls.config_path):
+            cls.logger.error(f"配置文件不存在: {cls.config_path}")
+            cls.has_config = False
+        else:
+            cls.has_config = True
+            cls.logger.info(f"使用配置文件: {cls.config_path}")
 
     async def asyncSetUp(self):
         """每个测试方法前的初始化"""
-        if not self.has_real_key:
-            self.skipTest("No real API key available")
+        if not self.has_config:
+            self.skipTest("配置文件不存在或无法读取")
         
-        self.client = Client("input/config/base.yaml", log_level=logging.DEBUG)
+        # 使用真实的配置文件
+        self.client = Client(self.config_path, log_level=logging.DEBUG)
 
     async def test_basic_functionality(self):
         """测试生成和聊天基础功能"""

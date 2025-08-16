@@ -20,7 +20,12 @@ class TestMultiKeyBalancing(unittest.IsolatedAsyncioTestCase):  # 继承测试�
 
     async def test_multi_key_balancing(self):  # 改为类方法
         """测试多密钥负载均衡及响应验证"""
-        client = Client("input/config/base.yaml", log_level=logging.DEBUG)
+        # 检查配置文件是否存在
+        config_path = "input/config/pllm.yaml"
+        if not os.path.exists(config_path):
+            self.skipTest(f"配置文件不存在: {config_path}")
+        
+        client = Client(config_path, log_level=logging.DEBUG)
         responses = []
 
         # 创建任务并收集响应

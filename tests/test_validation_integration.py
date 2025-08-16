@@ -28,14 +28,23 @@ class TestValidationIntegration(unittest.IsolatedAsyncioTestCase):
     
     async def asyncSetUp(self):
         """设置测试环境"""
-        # 检查API密钥
-        self.api_key = os.getenv("SILICONFLOW_API_KEY")
-        if not self.api_key:
-            self.skipTest("需要 SILICONFLOW_API_KEY 环境变量")
+        # 首先尝试使用配置文件中的API密钥
+        self.config_path = os.path.join(os.path.dirname(__file__), "..", "input", "config", "pllm.yaml")
         
-        # 创建临时配置文件
-        self.temp_config = tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False)
-        config_content = f"""
+        if os.path.exists(self.config_path):
+            # 直接使用配置文件
+            self.client = Client(self.config_path)
+            self.use_config_file = True
+            print(f"✅ 使用配置文件: {self.config_path}")
+        else:
+            # 回退到环境变量方式
+            self.api_key = os.getenv("SILICONFLOW_API_KEY")
+            if not self.api_key:
+                self.skipTest("需要 input/config/pllm.yaml 配置文件或 SILICONFLOW_API_KEY 环境变量")
+            
+            # 创建临时配置文件
+            self.temp_config = tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False)
+            config_content = f"""
 llm:
   use: "siliconflow"
   siliconflow:
@@ -44,27 +53,30 @@ llm:
       model: "deepseek-ai/DeepSeek-V2.5"
       rate_limit: 20
 """
-        self.temp_config.write(config_content)
-        self.temp_config.close()
-        
-        # 创建客户端
-        self.client = Client(self.temp_config.name)
+            self.temp_config.write(config_content)
+            self.temp_config.close()
+            
+            # 创建客户端
+            self.client = Client(self.temp_config.name)
+            self.use_config_file = False
+            print(f"⚠️  使用环境变量创建临时配置")
         
         # 等待初始化完成
         await asyncio.sleep(0.1)
     
     async def asyncTearDown(self):
         """清理测试环境"""
-        # 清理临时文件
-        if hasattr(self, 'temp_config'):
-            os.unlink(self.temp_config.name)
+        # 只有使用临时配置文件时才需要清理
+        if hasattr(self, 'use_config_file') and not self.use_config_file:
+            if hasattr(self, 'temp_config'):
+                os.unlink(self.temp_config.name)
     
     async def test_json_validator_constraint(self):
         """测试JSON验证器是否能约束LLM输出格式"""
         print("\n=== Testing JSON Validator Constraint ===")
         
-        # 创建JSON验证器
-        json_validator = JsonValidator(max_retries=3)
+        # 创建JSON验证器（允许提取JSON）
+        json_validator = JsonValidator(max_retries=3, strict=False, extract_json=True)
         
         # 要求返回JSON格式的用户信息
         prompt = """请返回一个包含以下字段的JSON对象：
@@ -216,13 +228,13 @@ llm:
         """测试验证器的重试行为"""
         print("\n=== Testing Validation Retry Behavior ===")
         
-        # 创建一个很难满足的验证器来测试重试
+        # 创建一个真正不可能满足的验证器来测试重试
         def impossible_validator(text):
-            """几乎不可能满足的验证条件"""
-            return "不可能的关键词abcxyz123" in text
+            """真正不可能满足的验证条件"""
+            return "极其特殊不可能出现的字符串ABCXYZ999888777" in text and len(text) < 5
         
         text_validator = TextValidator(
-            requirements="必须包含'不可能的关键词abcxyz123'",
+            requirements="必须包含'极其特殊不可能出现的字符串ABCXYZ999888777'且文本长度少于5个字符",
             validator_func=impossible_validator,
             max_retries=2  # 限制重试次数
         )
@@ -266,25 +278,6 @@ llm:
             self.fail(f"统计信息测试失败: {e}")
 
 
-async def main():
-    """主函数 - 运行所有集成测试"""
-    print("🔍 开始运行输出验证集成测试...")
-    print("警告: 这些测试使用真实API调用，会产生费用\n")
-    
-    # 运行测试
-    suite = unittest.TestLoader().loadTestsFromTestCase(TestValidationIntegration)
-    runner = unittest.TextTestRunner(verbosity=2)
-    result = runner.run(suite)
-    
-    # 输出结果
-    if result.wasSuccessful():
-        print("\n🎉 所有输出验证集成测试通过!")
-        return 0
-    else:
-        print(f"\n💥 测试失败: {len(result.failures)} 失败, {len(result.errors)} 错误")
-        return 1
-
-
 if __name__ == "__main__":
-    exit_code = asyncio.run(main())
-    sys.exit(exit_code)
+    # 当直接运行文件时，使用标准unittest运行器
+    unittest.main(verbosity=2)

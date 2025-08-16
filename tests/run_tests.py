@@ -80,12 +80,19 @@ def run_validation_tests():
 
 
 def run_validation_integration_tests():
-    """运行输出验证集成测试（需要真实API密钥）"""
+    """运行输出验证集成测试（使用真实API密钥）"""
     print("🔍 Running Output Validation Integration Tests (Real API calls)...")
     
-    if not os.getenv("SILICONFLOW_API_KEY"):
-        print("⚠️  No SILICONFLOW_API_KEY found. Validation integration tests will be skipped.")
-        return True
+    # 检查配置文件是否存在
+    config_path = "input/config/pllm.yaml"
+    if not os.path.exists(config_path):
+        if not os.getenv("SILICONFLOW_API_KEY"):
+            print("⚠️  Neither config file 'input/config/pllm.yaml' nor SILICONFLOW_API_KEY found. Validation integration tests will be skipped.")
+            return True
+        else:
+            print("⚠️  Config file not found, but SILICONFLOW_API_KEY is available. Using environment variable.")
+    else:
+        print(f"✅ Using config file: {config_path}")
     
     test_file = "tests/test_validation_integration.py"
     
