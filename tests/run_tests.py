@@ -20,7 +20,8 @@ def run_unit_tests(verbose=False):
     
     test_modules = [
         "tests.test_balance_algorithm_mocked",
-        "tests.test_client_interface_mocked"
+        "tests.test_client_interface_mocked",
+        "tests.test_output_validation"
     ]
     
     success = True
@@ -47,6 +48,63 @@ def run_unit_tests(verbose=False):
             print(f"⚠️  {test_file} not found, skipping...")
     
     return success
+
+
+def run_validation_tests():
+    """运行输出验证测试"""
+    print("🔍 Running Output Validation Tests...")
+    
+    test_modules = [
+        "tests.test_output_validation"
+    ]
+    
+    success = True
+    for test_module in test_modules:
+        test_file = test_module.replace(".", "/") + ".py"
+        if os.path.exists(test_file):
+            print(f"\n📝 Running {test_module}...")
+            result = subprocess.run([sys.executable, "-m", "unittest", test_module, "-v"], 
+                                  capture_output=True, text=True)
+            
+            if result.returncode != 0:
+                print(f"❌ {test_module} FAILED")
+                print("STDOUT:", result.stdout)
+                print("STDERR:", result.stderr)
+                success = False
+            else:
+                print(f"✅ {test_module} PASSED")
+        else:
+            print(f"⚠️  {test_file} not found, skipping...")
+    
+    return success
+
+
+def run_validation_integration_tests():
+    """运行输出验证集成测试（需要真实API密钥）"""
+    print("🔍 Running Output Validation Integration Tests (Real API calls)...")
+    
+    if not os.getenv("SILICONFLOW_API_KEY"):
+        print("⚠️  No SILICONFLOW_API_KEY found. Validation integration tests will be skipped.")
+        return True
+    
+    test_file = "tests/test_validation_integration.py"
+    
+    if os.path.exists(test_file):
+        print(f"\n📝 Running {test_file}...")
+        result = subprocess.run([sys.executable, test_file],
+                              capture_output=True, text=True)
+        
+        if result.returncode != 0:
+            print(f"❌ {test_file} FAILED")
+            print("STDOUT:", result.stdout)
+            print("STDERR:", result.stderr)
+            return False
+        else:
+            print(f"✅ {test_file} PASSED")
+            return True
+    else:
+        print(f"⚠️  {test_file} not found, skipping...")
+        return True
 
 
 def run_integration_tests():
@@ -137,9 +195,11 @@ def run_all_tests():
     print("🚀 Running ALL tests...")
     
     unit_success = run_unit_tests()
+    validation_success = run_validation_tests()
     integration_success = run_integration_tests()
+    validation_integration_success = run_validation_integration_tests()
     
-    if unit_success and integration_success:
+    if unit_success and validation_success and integration_success and validation_integration_success:
         print("\n🎉 ALL TESTS PASSED!")
         return True
     else:
@@ -151,8 +211,10 @@ def main():
     parser = argparse.ArgumentParser(description="PLLM Test Runner")
     parser.add_argument("--unit", action="store_true", help="Run unit tests only")
     parser.add_argument("--integration", action="store_true", help="Run integration tests only")
+    parser.add_argument("--validation", action="store_true", help="Run output validation tests only")
+    parser.add_argument("--validation-integration", action="store_true", help="Run validation integration tests only")
     parser.add_argument("--provider", type=str, nargs='?', const='all', help="Run provider tests (specify provider name or 'all')")
-    parser.add_argument("--all", action="store_true", help="Run all tests (unit + integration, excludes provider tests)")
+    parser.add_argument("--all", action="store_true", help="Run all tests (unit + validation + integration)")
     parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
     
     args = parser.parse_args()
@@ -166,6 +228,10 @@ def main():
         success = run_unit_tests(args.verbose)
     elif args.integration:
         success = run_integration_tests()
+    elif args.validation:
+        success = run_validation_tests()
+    elif args.validation_integration:
+        success = run_validation_integration_tests()
     elif args.provider:
         if args.provider == 'all':
             success = run_provider_tests()

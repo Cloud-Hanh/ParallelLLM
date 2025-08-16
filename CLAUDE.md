@@ -16,21 +16,32 @@ pip install -r requirements.txt
 ### Testing
 ```bash
 # Run balance algorithm tests (provider selection, token counting, failover)
-python3 -m unittest tests.test_balance_algorithm -v
+python3 -m unittest tests.test_balance_algorithm_mocked -v
 
 # Run client interface tests (invoke, invoke_batch, chat, generate, etc.)
-python3 -m unittest tests.test_client_interface -v
+python3 -m unittest tests.test_client_interface_mocked -v
+
+# Run output validation tests (JSON, text, regex validators)
+python3 -m unittest tests.test_output_validation -v
 
 # Run specific test methods
-python3 -m unittest tests.test_balance_algorithm.TestBalanceAlgorithm.test_token_counting_accuracy -v
-python3 -m unittest tests.test_client_interface.TestClientInterface.test_invoke_batch_method -v
+python3 -m unittest tests.test_balance_algorithm_mocked.TestBalanceAlgorithmMocked.test_token_counting_accuracy -v
+python3 -m unittest tests.test_client_interface_mocked.TestClientInterfaceMocked.test_invoke_batch_method -v
+python3 -m unittest tests.test_output_validation.TestJsonValidator.test_valid_json_object -v
 
-# Run all new tests
-python3 -m unittest tests.test_balance_algorithm tests.test_client_interface -v
+# Run all unit tests (mocked)
+python3 -m unittest tests.test_balance_algorithm_mocked tests.test_client_interface_mocked tests.test_output_validation -v
 
 # Legacy manual tests (requires valid API keys)
 python tests/manual_test.py
 python tests/multi_key_test.py
+
+# New organized test runner
+python tests/run_tests.py --unit          # Run unit tests (mocked)
+python tests/run_tests.py --validation    # Run validation tests (mocked)
+python tests/run_tests.py --integration   # Run integration tests (real API)
+python tests/run_tests.py --validation-integration  # Run validation with real API
+python tests/run_tests.py --all          # Run all tests
 ```
 
 ### Usage Examples

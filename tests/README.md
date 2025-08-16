@@ -10,6 +10,13 @@
 # 运行单元测试（不需要API密钥，最快）
 python tests/run_tests.py --unit
 
+# 运行输出验证测试（Mock测试）
+python tests/run_tests.py --validation
+
+# 运行输出验证集成测试（需要真实API密钥）
+export SILICONFLOW_API_KEY="your-api-key"
+python tests/run_tests.py --validation-integration
+
 # 运行所有测试
 python tests/run_tests.py --all
 
@@ -28,9 +35,10 @@ python tests/run_tests.py --integration
 tests/
 ├── conftest.py                    # 测试配置和公共工具
 ├── run_tests.py                   # 测试运行脚本
-├── test_base_provider.py          # Provider测试基类
-├── test_client.py                 # Client核心功能测试
-├── test_load_balancing.py         # 负载均衡和高级功能测试
+├── test_balance_algorithm_mocked.py # 负载均衡算法测试（Mock）
+├── test_client_interface_mocked.py  # 客户端接口测试（Mock）
+├── test_output_validation.py      # 输出验证功能测试（Mock）
+├── test_validation_integration.py # 输出验证集成测试（真实API）
 ├── manual_test.py                 # 手动集成测试（需要真实API密钥）
 ├── multi_key_test.py              # 多密钥负载均衡测试
 └── provider_tests/                # 各提供商专门测试
@@ -53,13 +61,34 @@ tests/
 - 错误处理
 - 参数传递
 - 统计信息收集
+- 输出验证功能（JSON、文本、正则表达式验证器）
 
 **运行方式：**
 ```bash
 python tests/run_tests.py --unit
 ```
 
-### 2. 提供商测试（Provider Tests）
+### 2. 输出验证测试（Output Validation Tests）
+专门测试输出格式验证功能
+
+**测试内容：**
+- JsonValidator：JSON格式验证、Schema验证、提取模式
+- TextValidator：自定义文本验证函数
+- RegexValidator：正则表达式模式匹配
+- 与Client类的集成：重试机制、错误处理
+- ValidationResult数据结构
+
+**运行方式：**
+```bash
+# 运行Mock验证测试
+python tests/run_tests.py --validation
+
+# 运行真实API验证测试（需要API密钥）
+export SILICONFLOW_API_KEY="your-api-key"
+python tests/run_tests.py --validation-integration
+```
+
+### 3. 提供商测试（Provider Tests）
 每个提供商的专门测试
 
 **支持的提供商：**
@@ -77,7 +106,7 @@ python tests/run_tests.py --provider openai
 python tests/run_tests.py --provider siliconflow
 ```
 
-### 3. 负载均衡测试（Load Balancing Tests）
+### 4. 负载均衡测试（Load Balancing Tests）
 测试高级功能和系统级行为
 
 **测试内容：**
@@ -88,7 +117,7 @@ python tests/run_tests.py --provider siliconflow
 - 速率限制
 - 健康检查
 
-### 4. 集成测试（Integration Tests）
+### 5. 集成测试（Integration Tests）
 使用真实API密钥测试实际功能
 
 **前置条件：**
@@ -137,13 +166,23 @@ mock_error_response(status=500, message="错误信息")
 # 最基础：运行单元测试（无需API密钥，速度最快）
 python tests/run_tests.py --unit
 
+# 验证功能：运行输出验证测试（Mock）
+python tests/run_tests.py --validation
+
 # 开发时：运行核心客户端测试
-python -m unittest tests.test_client.TestPLLMClient
+python -m unittest tests.test_client_interface_mocked.TestClientInterfaceMocked
+
+# 验证时：运行输出验证单个测试
+python -m unittest tests.test_output_validation.TestJsonValidator.test_valid_json_object -v
 
 # 调试时：运行单个测试方法并查看详细输出
-python -m unittest tests.test_client.TestPLLMClient.test_generate -v
+python -m unittest tests.test_output_validation.TestClientIntegration.test_generate_with_valid_json_validator -v
 
-# 集成测试：验证实际API调用（需要真实密钥）
+# 集成测试：验证真实输出约束功能（需要真实密钥）
+export SILICONFLOW_API_KEY="your-api-key"
+python tests/run_tests.py --validation-integration
+
+# 传统集成测试：验证实际API调用（需要真实密钥）
 export SILICONFLOW_API_KEY="your-api-key"
 python tests/manual_test.py
 
@@ -172,14 +211,19 @@ python tests/run_tests.py --help
 python tests/run_tests.py --unit --verbose
 
 # 运行特定测试文件
-python -m unittest tests/test_client.py
-python -m unittest tests.test_client.TestPLLMClient.test_generate
+python -m unittest tests/test_output_validation.py
+python -m unittest tests.test_output_validation.TestJsonValidator.test_valid_json_object
 
 # 运行单个测试方法
-python -m unittest tests.test_client.TestPLLMClient.test_chat
+python -m unittest tests.test_output_validation.TestClientIntegration.test_generate_with_valid_json_validator
+
+# 运行输出验证相关测试
+python -m unittest tests.test_output_validation.TestJsonValidator
+python -m unittest tests.test_output_validation.TestTextValidator  
+python -m unittest tests.test_output_validation.TestRegexValidator
 
 # 使用标准unittest运行器（CLAUDE.md推荐）
-python -m unittest tests/test_client.py
+python -m unittest tests/test_output_validation.py
 ```
 
 ## 测试覆盖范围
@@ -190,6 +234,15 @@ python -m unittest tests/test_client.py
 - ✅ `execute()` / `invoke()` / `invoke_batch()` - 调用接口
 - ✅ `embedding()` / `embedding_sync()` - 向量化
 - ✅ `get_stats()` - 统计信息
+- ✅ `output_validator` 参数 - 输出验证功能
+
+### 输出验证功能覆盖
+- ✅ `JsonValidator` - JSON格式验证和Schema验证
+- ✅ `TextValidator` - 自定义文本验证函数
+- ✅ `RegexValidator` - 正则表达式模式匹配
+- ✅ `ValidationResult` - 验证结果数据结构
+- ✅ 与Client集成 - 自动重试和错误处理
+- ✅ 真实API约束测试 - 验证LLM输出是否真正被约束
 
 ### Provider功能覆盖  
 - ✅ 基础聊天功能
