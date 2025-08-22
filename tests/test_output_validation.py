@@ -91,7 +91,7 @@ class TestJsonValidator(unittest.TestCase):
         result = validator.validate(text_with_json)
         
         self.assertTrue(result.is_valid)
-        self.assertEqual(result.parsed_output, {"name": "Alice", "score": 95})
+        self.assertEqual(result.parsed_output, '{"name": "Alice", "score": 95}')
     
     def test_strict_mode_rejects_mixed_text(self):
         """Test that strict mode rejects mixed text."""

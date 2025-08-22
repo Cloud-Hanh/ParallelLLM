@@ -115,7 +115,12 @@ class Client:
                 
                 if validation_result.is_valid:
                     self.logger.info(f"Output validation successful after {attempts + 1} attempts")
-                    return response
+                    # If parsed_output is a string, it means JSON was extracted from text -> return it
+                    # If parsed_output is a dict/list, it's the parsed version of already valid JSON -> return original
+                    if validation_result.parsed_output is not None and isinstance(validation_result.parsed_output, str):
+                        return validation_result.parsed_output
+                    else:
+                        return response
                 
                 # 验证失败，准备重试
                 attempts += 1

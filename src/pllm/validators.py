@@ -146,7 +146,7 @@ class JsonValidator(OutputValidator):
                     
                     return ValidationResult(
                         is_valid=True,
-                        parsed_output=parsed_json
+                        parsed_output=extracted_json  # Return extracted JSON string when extracted
                     )
                 except json.JSONDecodeError as e:
                     return ValidationResult(
